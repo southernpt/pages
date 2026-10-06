@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tách biển số xe</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --line: #dde1e6; --text: #1f2328; --muted: #6a737d;
+    --ok: #1a7f37; --ok-bg: #dafbe1; --bad: #cf222e; --bad-bg: #ffd8d3; --dup: #9a6700; --dup-bg: #fff1b8;
+    --accent: #0969da; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 12px 20px; background: var(--card); border-bottom: 1px solid var(--line); display: flex; gap: 16px; align-items: center; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 16px; margin: 0; }
+  header h1 small { color: var(--muted); font-weight: normal; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { padding: 2px 10px; border-radius: 999px; background: #eef1f4; font-size: 13px; cursor: default; }
+  .chip b { font-variant-numeric: tabular-nums; }
+  .chip.ok { background: var(--ok-bg); color: var(--ok); }
+  .chip.bad { background: var(--bad-bg); color: var(--bad); cursor: pointer; }
+  .chip.dup { background: var(--dup-bg); color: var(--dup); }
+  main { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; padding: 16px 20px; }
+  @media (max-width: 960px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
+  .card h2 { font-size: 14px; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+  .card h2 .sp { flex: 1; }
+  .full { grid-column: 1 / -1; }
+  button, select { font: inherit; font-size: 13px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 6px; background: #f6f8fa; cursor: pointer; }
+  button:hover { background: #eef1f4; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+
+  /* Editor = transparent textarea over a highlight backdrop with identical metrics */
+  .editor { position: relative; height: 360px; }
+  .editor textarea, .editor .backdrop {
+    position: absolute; inset: 0; margin: 0; width: 100%; height: 100%;
+    padding: 10px; border: 1px solid var(--line); border-radius: 6px;
+    font: 13px/20px var(--mono); letter-spacing: 0; tab-size: 4;
+    white-space: pre-wrap; overflow-wrap: break-word; word-break: normal;
+    overflow-y: scroll; overflow-x: hidden;
+  }
+  .editor .backdrop { color: transparent; background: #fff; pointer-events: none; }
+  .editor textarea { background: transparent; color: var(--text); resize: none; outline: none; caret-color: var(--text); }
+  .editor textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #0969da22; }
+  .backdrop mark { color: transparent; border-radius: 3px; }
+  .backdrop mark.ok { background: #dafbe18c; }
+  .backdrop mark.bad { background: var(--bad-bg); box-shadow: inset 0 -2px 0 var(--bad); }
+  .backdrop mark.dup { background: var(--dup-bg); box-shadow: inset 0 -2px 0 var(--dup); }
+  .backdrop mark.dupsrc { box-shadow: inset 0 -2px 0 var(--dup); }
+  .backdrop mark.same { background: #ffd33d; box-shadow: 0 0 0 2px #bf8700; }
+  .backdrop mark.active { background: #b6d7ff; box-shadow: 0 0 0 2px var(--accent); }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .legend span { display: inline-block; padding: 0 6px; border-radius: 3px; margin-right: 6px; }
+
+  #out { width: 100%; height: 150px; font: 13px/20px var(--mono); padding: 8px; border: 1px solid var(--line); border-radius: 6px; resize: vertical; background: #fbfcfd; }
+  .errors { list-style: none; margin: 0; padding: 0; max-height: 190px; overflow: auto; }
+  .errors li { padding: 6px 8px; border-left: 3px solid var(--bad); background: #fff6f5; margin-bottom: 6px; border-radius: 0 6px 6px 0; cursor: pointer; }
+  .errors li.dup { border-color: var(--dup); background: #fffbea; }
+  .errors li:hover { filter: brightness(.97); }
+  .errors code { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; }
+  .errors .why { color: var(--bad); font-size: 12px; }
+  .errors li.dup .why { color: var(--dup); }
+  .empty { color: var(--muted); font-style: italic; }
+
+  .tablewrap { max-height: 520px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; table-layout: fixed; min-width: 900px; }
+  th, td { padding: 5px 8px; border-bottom: 1px solid #eef0f2; text-align: left; vertical-align: top; }
+  th { position: sticky; top: 0; background: #f6f8fa; z-index: 1; font-weight: 600; }
+  td { cursor: pointer; }
+  td.mono { font-family: var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+  td.note .tag { white-space: normal; display: inline-block; }
+  td.note .cand { overflow-wrap: anywhere; }
+  td.num { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  tr:hover td { background: #f3f6fa; }
+  tr.bad td { background: #fff6f5; }
+  tr.dup td { background: #fffbea; }
+  tr.dupsrc td:first-child { box-shadow: inset 3px 0 0 var(--dup); }
+  tr.dup td:first-child { box-shadow: inset 3px 0 0 var(--dup); }
+  tr.same td { background: #fff1b8 !important; }
+  tr.active td { background: #ddebff !important; }
+  tr.group-start td { border-top: 2px solid #e8d48a; }
+  .pos { font-family: var(--mono); font-size: 12px; padding: 0 4px; border-radius: 3px; background: #fff; border: 1px solid #e8d48a; cursor: pointer; margin-right: 2px; }
+  .pos:hover { background: #ffd33d; }
+  .pos.first { font-weight: 700; }
+  button.del { color: var(--bad); }
+  .errors li.dup.same { background: #fff1b8; }
+  .chip.dup { cursor: pointer; }
+  .tag { font-size: 12px; padding: 0 6px; border-radius: 4px; white-space: nowrap; }
+  .tag.ok { background: var(--ok-bg); color: var(--ok); }
+  .tag.bad { background: var(--bad-bg); color: var(--bad); }
+  .tag.dup { background: var(--dup-bg); color: var(--dup); }
+  .cand { font-family: var(--mono); font-size: 12px; color: var(--ok); }
+  .fix { font-size: 12px; padding: 0 6px; margin-left: 4px; }
+  .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #1f2328; color: #fff; padding: 6px 14px; border-radius: 6px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: .92; }
+
+  /* ---- Chế độ beta (người dùng phổ thông): ẩn chữ kỹ thuật, KHÔNG xoá. Ctrl+Shift+D để bật/tắt. ---- */
+  .friendly { display: none; }
+  body.beta .tech { display: none !important; }
+  body.beta .friendly { display: revert; }
+  body.beta col.c-idx { visibility: collapse; width: 0; }
+  body.beta .c-idx { display: none; }
+  .steps { margin: 12px 20px 0; padding: 10px 14px; background: #ddf4ff; border: 1px solid #54aeff66; border-radius: 8px; font-size: 14px; }
+  .steps ol { margin: 4px 0 0; padding-left: 22px; }
+  .beta-tag { font-size: 11px; font-weight: 600; color: #fff; background: #8250df; padding: 1px 6px; border-radius: 4px; vertical-align: middle; }
+</style>
+</head>
+<body class="beta">
+<header>
+  <h1>Tách biển số <small class="tech">— parity JS của <code>split_plates()</code> / <code>split_plates_array()</code></small><span class="friendly beta-tag">BETA</span></h1>
+  <div class="chips" id="chips"></div>
+</header>
+
+<div class="steps friendly">
+  <b>Cách dùng</b>
+  <ol>
+    <li>Dán danh sách biển số vào ô <b>Dữ liệu nhập</b> (có thể kéo-thả file .txt vào ô).</li>
+    <li>Xem các chỗ tô <span style="background:var(--bad-bg)">đỏ</span> (sai) và <span style="background:var(--dup-bg)">vàng</span> (trùng). Bấm <b>Sửa</b> / <b>Xoá</b> để sửa nhanh, hoặc sửa trực tiếp trong ô.</li>
+    <li>Bấm <b>Copy</b> để lấy danh sách biển số đã chuẩn hoá. Bấm vào một dòng trong bảng để nhảy tới chỗ đó trong ô nhập.</li>
+  </ol>
+</div>
+<main>
+  <section class="card">
+    <h2><span class="tech">Dữ liệu thô</span><span class="friendly">Dữ liệu nhập</span> <span class="sp"></span>
+      <button id="btnSample" title="Nạp dữ liệu mẫu để thử"><span class="tech">Mẫu test-plates.txt</span><span class="friendly">Thử dữ liệu mẫu</span></button>
+      <button id="btnOpen">Mở file…</button>
+      <button id="btnUndo" title="Hoàn tác lần sửa / xoá gần nhất" disabled>↶ Hoàn tác</button>
+      <button id="btnClear"><span class="tech">Xoá</span><span class="friendly">Xoá hết</span></button>
+      <input type="file" id="file" accept=".txt,.csv,text/*" hidden>
+    </h2>
+    <div class="editor">
+      <div class="backdrop" id="backdrop" aria-hidden="true"></div>
+      <textarea id="input" spellcheck="false" placeholder="Dán danh sách biển số, cách nhau bởi dấu , ; &amp; /"></textarea>
+    </div>
+    <div class="hint legend">
+      <span style="background:#dafbe1">hợp lệ</span><span style="background:var(--bad-bg)">không hợp lệ</span><span style="background:var(--dup-bg)">trùng</span>
+      Dấu phân cách: <b>,</b> <b>;</b> <b>&amp;</b> <b>/</b><span class="tech"> (giống SQL)</span> — xuống dòng / khoảng trắng không tách. Có thể kéo-thả file .txt vào ô.
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 title="Đã chuẩn hoá, bỏ trùng, giữ thứ tự xuất hiện đầu">Biển hợp lệ <small class="tech" style="font-weight:normal;color:var(--muted)">(split_plates_array)</small><span class="sp"></span>
+      <select id="sep"><option value=", ">, </option><option value="\n">xuống dòng</option><option value="; ">; </option></select>
+      <button id="btnCopy" class="primary">Copy</button>
+    </h2>
+    <textarea id="out" readonly></textarea>
+
+    <h2 style="margin-top:12px">Lỗi / cảnh báo <span class="sp"></span>
+      <button id="btnFixAll" title="Thay mỗi phần lỗi bằng các biển tìm được bên trong, nối bằng dấu ,">Áp dụng mọi gợi ý</button>
+      <button id="btnDelDupAll" class="del" title="Xoá mọi lần xuất hiện lặp lại trong dữ liệu thô, giữ lần đầu">Xoá mọi trùng</button>
+    </h2>
+    <ul class="errors" id="errors"></ul>
+  </section>
+
+  <section class="card full">
+    <h2><span class="tech">Bảng đối chiếu</span><span class="friendly">Chi tiết từng mục</span> <small style="font-weight:normal;color:var(--muted)">— bấm vào ô để nhảy tới vị trí trong <span class="tech">dữ liệu thô</span><span class="friendly">ô nhập</span></small><span class="sp"></span>
+      <select id="filter">
+        <option value="all">Tất cả</option>
+        <option value="bad">Không hợp lệ</option>
+        <option value="ok">Hợp lệ</option>
+        <option value="dup">Trùng (gộp theo biển)</option>
+      </select>
+    </h2>
+    <div class="tablewrap">
+      <table>
+        <colgroup><col class="c-idx" style="width:48px"><col style="width:76px"><col style="width:30%"><col style="width:20%"><col style="width:72px"><col></colgroup>
+        <thead><tr><th class="c-idx">#</th><th><span class="tech">first_pos</span><span class="friendly">Vị trí</span></th><th><span class="tech">raw</span><span class="friendly">Bạn nhập</span></th><th><span class="tech">plate</span><span class="friendly">Biển số chuẩn</span></th><th><span class="tech">is_valid</span><span class="friendly">Kết quả</span></th><th>Ghi chú</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script type="text/plain" id="sample">61H-14258, 61H-039.58, 51C-94762 50H-90445, 61H-06801, 51D-42130, 61H-06814 67H-05261; 67R-000.25, 66F-001.16, 66R -001.34 67H-05264; 67RM-00423, 67H-05261; 67R-000.25, 50H-146.40, 51R-214.78, 50H-150.98, 51R-215.01, 50H-161.65, 51R-220.21, 50H-162.86, 51R-221.08, 50H-290.78, 51R-227.36, 50H-543.00, 50RM-042.57, 50H-612.13, 50RM-049.19, 61H-14258, 61H-039.58, 51C-94762 50H-90445, 61H-06801, 51D-42130, 61H-06814 67H-05261; 67R-000.25, 66F-001.16, 66R -001.34 67H-05264; 67RM-00423, 67H-05261; 67R-000.25, 50H-146.40, 51R-214.78, 50H-150.98, 51R-215.01, 50H-161.65, 51R-220.21, 50H-162.86, 51R-221.08, 50H-290.78, 51R-227.36, 50H-543.00, 50RM-042.57, 50H-612.13, 50RM-049.19, 95H-012.54, 95RM-000.47, 60H-045.11, 60R-055.67, 60H-184.21, 60R-037.98, 50H-727.22, 50RM- 08038, 70C-02908, 50RM-21829, 51C-21861, 51R-03991, 51C-67059, 70R-02875, 70C-04755, 70R-02469, 70C-05603, 70R-02451, 70H-06608, 70R-02467, 70H-06600, 70R-00645, 51C-73117, 51C-34631, 70RM-01432, 70C-03677, 70RM-01433, 70C.05669, 70RM-01434
+50H –761.42 & Mooc 51R – 185.83;
+50H -233.55 & Mooc 51R – 317.54
+50H – 365.32;
+51C – 936.63;
+50H-44120 & 61R-06388
+60H-12818 ; 60RM-00340
+95H-01254, 95RM-00047; 62H.03068. 62R.010.93; 51M-654.92, 66RM-009.22 50E-39169; 50RM-12944, 60C41959, 60H02896, 66C10530;66R00189, 72H03902;72R01585, 60H37961, 15C12556, 29H12901
+50H-08627 / 51R-26079
+62H-02746, Rơ móc 62RM 00085
+72C 172.76; 50H-14640 & 51R-21478
+50H-15098 & 51R-21501
+50H-16286 & 51R-22108
+50H-16165 & 51R-22021
+50H-29078 & 51R-22736
+50H-54300 & 50RM-04257
+50H-61213 & 50RM-04919
+95H-01254 & 95RM-00047
+60H-18421 & 60R-03798
+60H-04511 & 60R-05567
+50H-72722 & 50RM-08038
+61H-12638 & 61R-06802
+61H-17822 & 61R-06056
+61H-08098 & 61RM-01379
+50H-44120 & 61R-06388; 61H 09039
+61E 01316
+60C 54916
+61H 09486
+50E 57507
+61H 03958
+51C-92455 & 51R30214;  50LD-009.04
+50LD-00903
+50LD-03825
+50LD-10079
+50LD-10041
+ 61C - 453.81,
+51M - 688.52 & 50RM - 172.85
+</script>
+
+<script>
+/* ==== BEGIN split-plates.js (giữ y hệt file split-plates.js) ==== */
+// Parity port of split-plates.sql (split_plates / split_plates_array) to JavaScript.
+// Behaviour must match PostgreSQL exactly — verify with: node split-plates.test.js
+// Works in browser (window.SplitPlates) and Node (module.exports).
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.SplitPlates = api;
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  // Same regex as SQL is_valid (TT 79/2024/TT-BCA)
+  const VALID_RE = /^[1-9][0-9](?:[ABCDEFGHKLMNPSTUVXYZR]|RM|LD|CD|HC|KT)[0-9]{4,5}$/;
+  const FMT5_RE = /^([0-9]{2}[A-Z]{1,2})([0-9]{3})([0-9]{2})$/;
+  const FMT4_RE = /^([0-9]{2}[A-Z]{1,2})([0-9]{4})$/;
+
+  // PG btrim(text) with 1 arg trims ONLY the space character ' ' (not \n, \t).
+  function btrim(s) {
+    return s.replace(/^ +| +$/g, '');
+  }
+
+  // PG upper(): per-character mapping (never expands 'ß' -> 'SS').
+  function pgUpper(s) {
+    let out = '';
+    for (const ch of s) {
+      const u = ch.toUpperCase();
+      out += [...u].length === 1 ? u : ch;
+    }
+    return out;
+  }
+
+  // regexp_replace(raw, '[^[:alnum:]]', '', 'g') under a UTF-8 locale:
+  // keeps Unicode letters + digits (e.g. "ơ", "ó" survive).
+  function compactOf(raw) {
+    return pgUpper(raw.replace(/[^\p{L}\p{Nd}\p{Nl}]/gu, ''));
+  }
+
+  function formatPlate(compact, isValid) {
+    if (isValid && /[0-9]{5}$/.test(compact)) return compact.replace(FMT5_RE, '$1-$2.$3');
+    if (isValid) return compact.replace(FMT4_RE, '$1-$2');
+    return compact;
+  }
+
+  // Like split_plates() but also returns char offsets (start/end in input) + compact,
+  // and the index of the separator before/after the part (-1 if none).
+  function splitPlatesDetailed(input) {
+    if (input == null) return [];
+    const rows = [];
+    const sepRe = /[,;&/]/g; // regexp_split_to_array(p_input, '[,;&/]')
+    let segStart = 0;
+    let ord = 0;
+    const pushSeg = (segEnd, sepAfter) => {
+      ord += 1;
+      const seg = input.slice(segStart, segEnd);
+      const raw = btrim(seg);
+      if (btrim(raw) === '') return; // WHERE btrim(raw) <> ''
+      const lead = seg.length - seg.replace(/^ +/, '').length;
+      const compact = compactOf(raw);
+      const isValid = VALID_RE.test(compact);
+      rows.push({
+        raw,
+        plate: formatPlate(compact, isValid),
+        is_valid: isValid,
+        first_pos: ord,
+        compact,
+        start: segStart + lead,
+        end: segStart + lead + raw.length,
+        sepBefore: segStart - 1,
+        sepAfter,
+      });
+    };
+    let m;
+    while ((m = sepRe.exec(input)) !== null) {
+      pushSeg(m.index, m.index);
+      segStart = m.index + 1;
+    }
+    pushSeg(input.length, -1);
+    return rows;
+  }
+
+  // split_plates(p_input) -> rows {raw, plate, is_valid, first_pos}
+  function splitPlates(input) {
+    return splitPlatesDetailed(input).map(({ raw, plate, is_valid, first_pos }) => ({
+      raw, plate, is_valid, first_pos,
+    }));
+  }
+
+  // split_plates_array(p_input) -> valid plates, deduped, ordered by first appearance
+  function splitPlatesArray(input) {
+    const seen = new Set();
+    const out = [];
+    for (const r of splitPlates(input)) {
+      if (r.is_valid && !seen.has(r.plate)) {
+        seen.add(r.plate);
+        out.push(r.plate);
+      }
+    }
+    return out;
+  }
+
+  // ---- Diagnostics (NOT part of SQL parity; used by the demo UI) ----
+
+  // Plate-like fragments inside a raw string, tolerant of spaces / - – . between parts.
+  const CANDIDATE_RE =
+    /(?<![0-9\p{L}])([1-9][0-9])[ \t]*[-–—.]?[ \t]*(RM|LD|CD|HC|KT|[ABCDEFGHKLMNPSTUVXYZR])[ \t]*[-–—.]?[ \t]*([0-9]{3}[ \t]*\.?[ \t]*[0-9]{2}|[0-9]{4})(?![0-9])/gu;
+
+  function findCandidates(raw) {
+    const out = [];
+    const up = pgUpper(raw);
+    let m;
+    CANDIDATE_RE.lastIndex = 0;
+    while ((m = CANDIDATE_RE.exec(up)) !== null) {
+      const compact = compactOf(m[0]);
+      if (VALID_RE.test(compact)) out.push(formatPlate(compact, true));
+    }
+    return out;
+  }
+
+  function diagnose(row) {
+    if (row.is_valid) return null;
+    const c = row.compact;
+    const cands = findCandidates(row.raw);
+    if (c === '') return { reason: 'Phần rỗng (chỉ có xuống dòng / ký hiệu)', candidates: [] };
+    if (cands.length >= 2)
+      return {
+        reason: `Có ${cands.length} biển trong 1 phần — thiếu dấu phân cách , ; & / (xuống dòng, khoảng trắng không tách)`,
+        candidates: cands,
+      };
+    if (cands.length === 1)
+      return { reason: 'Có chữ/ký tự thừa quanh biển số (vd. "Mooc", "Rơ móc")', candidates: cands };
+    if (/[^\x00-\x7F]/.test(c)) return { reason: 'Chứa ký tự có dấu / không phải A-Z, 0-9', candidates: [] };
+    const m = c.match(/^([0-9]*)([A-Z]*)([0-9]*)(.*)$/);
+    if (m[4]) return { reason: 'Sai cấu trúc (số + seri + số thứ tự)', candidates: [] };
+    if (m[1].length !== 2) return { reason: `Mã địa phương phải 2 số, đang có ${m[1].length}`, candidates: [] };
+    if (m[1][0] === '0') return { reason: 'Mã địa phương phải từ 11-99', candidates: [] };
+    if (!/^(?:[ABCDEFGHKLMNPSTUVXYZR]|RM|LD|CD|HC|KT)$/.test(m[2]))
+      return { reason: `Seri "${m[2] || '(trống)'}" không hợp lệ (TT 79/2024)`, candidates: [] };
+    if (m[3].length < 4 || m[3].length > 5)
+      return { reason: `Số thứ tự phải 4 hoặc 5 chữ số, đang có ${m[3].length}`, candidates: [] };
+    return { reason: 'Không khớp mẫu biển số', candidates: [] };
+  }
+
+  // Valid rows whose plate already appeared earlier (same order as split_plates_array dedupe).
+  function findDuplicates(rows) {
+    const first = new Map();
+    const dups = [];
+    for (const r of rows) {
+      if (!r.is_valid) continue;
+      if (first.has(r.plate)) dups.push({ row: r, firstRow: first.get(r.plate) });
+      else first.set(r.plate, r);
+    }
+    return dups;
+  }
+
+  // Remove one part (from splitPlatesDetailed) plus one adjacent separator, keeping the text tidy:
+  //   "a, X, b" -> "a, b"   (eat X + following separator + spaces)
+  //   "a, X"    -> "a"      (last part: eat preceding separator + X)
+  function removePart(text, r) {
+    if (r.sepAfter >= 0) {
+      let end = r.sepAfter + 1;
+      while (text[end] === ' ' || text[end] === '\t') end++;
+      return text.slice(0, r.start) + text.slice(end);
+    }
+    if (r.sepBefore >= 0) {
+      let start = r.sepBefore;
+      while (start > 0 && (text[start - 1] === ' ' || text[start - 1] === '\t')) start--;
+      return text.slice(0, start) + text.slice(r.end);
+    }
+    return text.slice(0, r.start) + text.slice(r.end);
+  }
+
+  // Remove every duplicate occurrence (keeps the first one). Re-splits after each removal
+  // so adjacent removals never overlap.
+  function removeDuplicates(text, onlyPlate) {
+    let removed = 0;
+    for (;;) {
+      const dups = findDuplicates(splitPlatesDetailed(text)).filter((d) => !onlyPlate || d.row.plate === onlyPlate);
+      if (!dups.length) return { text, removed };
+      text = removePart(text, dups[dups.length - 1].row);
+      removed++;
+    }
+  }
+
+  return {
+    splitPlates, splitPlatesArray, splitPlatesDetailed, findCandidates, diagnose, compactOf, formatPlate,
+    findDuplicates, removePart, removeDuplicates,
+  };
+});
+/* ==== END split-plates.js ==== */
+</script>
+
+<script>
+(() => {
+  const SP = window.SplitPlates;
+  const $ = (id) => document.getElementById(id);
+  const input = $('input'), backdrop = $('backdrop'), tbody = $('tbody');
+  let rows = [];          // detailed rows + extras
+  let groups = new Map(); // plate -> [first, ...copies]  (only plates seen >= 2 times)
+  let activeIdx = -1;
+  const undoStack = [];
+
+  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const show = (s) => esc(s).replace(/\n/g, '<span style="color:#aaa">↵</span>\n');
+  const posChips = (g) => g.map((r, k) =>
+    `<span class="pos${k ? '' : ' first'}" data-i="${r.i}" title="${k ? 'bản trùng' : 'lần đầu (giữ lại)'}">#${r.first_pos}</span>`).join('');
+
+  function analyse(text) {
+    const r = SP.splitPlatesDetailed(text);
+    r.forEach((row, i) => { row.i = i; row.diag = SP.diagnose(row); });
+    groups = new Map();
+    for (const { row, firstRow } of SP.findDuplicates(r)) {
+      row.dupOf = firstRow;
+      if (!groups.has(row.plate)) groups.set(row.plate, [firstRow]);
+      groups.get(row.plate).push(row);
+    }
+    for (const row of r) {
+      row.kind = !row.is_valid ? 'bad' : row.dupOf ? 'dup' : 'ok';
+      row.isDupSrc = !row.dupOf && groups.has(row.plate);
+    }
+    return r;
+  }
+
+  function render() {
+    const text = input.value;
+    const keep = activeIdx;
+    rows = analyse(text);
+    activeIdx = -1;
+
+    // backdrop highlights
+    let html = '', pos = 0;
+    for (const r of rows) {
+      html += esc(text.slice(pos, r.start));
+      html += `<mark class="${r.kind}${r.isDupSrc ? ' dupsrc' : ''}" data-i="${r.i}">${esc(text.slice(r.start, r.end))}</mark>`;
+      pos = r.end;
+    }
+    backdrop.innerHTML = html + esc(text.slice(pos)) + '\n ';
+    backdrop.scrollTop = input.scrollTop;
+
+    // stats
+    const nBad = rows.filter((r) => r.kind === 'bad').length;
+    const nDup = rows.filter((r) => r.kind === 'dup').length;
+    const plates = SP.splitPlatesArray(text);
+    $('chips').innerHTML =
+      `<span class="chip"><span class="tech">Phần tách</span><span class="friendly">Tổng số mục</span>: <b>${rows.length}</b></span>` +
+      `<span class="chip ok">Hợp lệ: <b>${rows.length - nBad}</b></span>` +
+      `<span class="chip ok">Biển duy nhất: <b>${plates.length}</b></span>` +
+      `<span class="chip dup" id="chipDup" title="Lọc bảng theo trùng">Trùng: <b>${nDup}</b> (${groups.size} biển)</span>` +
+      `<span class="chip bad" id="chipBad" title="Lọc bảng theo lỗi">Không hợp lệ: <b>${nBad}</b></span>`;
+    $('chipBad').onclick = () => { $('filter').value = 'bad'; renderTable(); };
+    $('chipDup').onclick = () => { $('filter').value = 'dup'; renderTable(); };
+
+    // output
+    $('out').value = plates.join($('sep').value.replace('\\n', '\n'));
+
+    // errors list: invalid parts, then one entry per duplicated plate
+    const bad = rows.filter((r) => r.kind === 'bad').map((r) =>
+      `<li data-i="${r.i}"><div><b>#${r.first_pos}</b> <code>${show(r.raw)}</code></div>
+         <div class="why">✖ ${esc(r.diag.reason)}</div>
+         ${r.diag.candidates.length ? `<div>Tìm thấy: <span class="cand">${r.diag.candidates.join(', ')}</span>
+           <button class="fix" data-fix="${r.i}">Sửa</button></div>` : ''}</li>`);
+    const dup = [...groups].map(([plate, g]) =>
+      `<li class="dup" data-i="${g[1].i}" data-plate="${esc(plate)}">
+         <div><b>${esc(plate)}</b> xuất hiện <b>${g.length}</b> lần: ${posChips(g)}</div>
+         <div class="why">⚠ Trùng — chỉ giữ lần đầu trong danh sách hợp lệ
+           <button class="fix del" data-deldup="${esc(plate)}">Xoá ${g.length - 1} bản trùng</button></div></li>`);
+    $('errors').innerHTML = bad.length || dup.length
+      ? bad.join('') + dup.join('')
+      : '<li class="empty" style="border:0;background:none">Không có lỗi 🎉</li>';
+    $('btnFixAll').disabled = !rows.some((r) => r.diag && r.diag.candidates.length);
+    $('btnDelDupAll').disabled = !nDup;
+    $('btnDelDupAll').textContent = nDup ? `Xoá mọi trùng (${nDup})` : 'Xoá mọi trùng';
+
+    renderTable();
+    if (keep >= 0 && keep < rows.length) setActive(keep, false);
+  }
+
+  function renderTable() {
+    const f = $('filter').value;
+    let list;
+    if (f === 'dup') {
+      // group duplicates by plate: first occurrence followed by its copies
+      list = [...groups.values()].flatMap((g) => g.map((r, k) => ({ r, groupStart: k === 0 })));
+    } else {
+      list = rows.filter((r) => f === 'all' || r.kind === f).map((r) => ({ r }));
+    }
+    tbody.innerHTML = list.length ? list.map(({ r, groupStart }) => {
+      let note = '';
+      if (r.kind === 'bad') {
+        note = `<span class="tag bad">${esc(r.diag.reason)}</span>` +
+          (r.diag.candidates.length ? `<div class="cand">→ ${r.diag.candidates.join(', ')} <button class="fix" data-fix="${r.i}">Sửa</button></div>` : '');
+      } else if (r.kind === 'dup') {
+        note = `<span class="tag dup">trùng #${r.dupOf.first_pos}</span> <button class="fix del" data-del="${r.i}">Xoá</button>`;
+      } else if (r.isDupSrc) {
+        const n = groups.get(r.plate).length;
+        note = `<span class="tag dup">lần đầu · ${n} lần</span> <button class="fix del" data-deldup="${esc(r.plate)}">Xoá ${n - 1} bản trùng</button>`;
+      }
+      const cls = [r.kind, r.isDupSrc ? 'dupsrc' : '', groupStart ? 'group-start' : ''].join(' ');
+      return `<tr class="${cls}" data-i="${r.i}">
+        <td class="num c-idx">${r.i + 1}</td><td class="num">${r.first_pos}</td>
+        <td class="mono raw">${show(r.raw)}</td><td class="mono plate">${esc(r.plate)}</td>
+        <td><span class="tag ${r.is_valid ? 'ok' : 'bad'}"><span class="tech">${r.is_valid}</span><span class="friendly">${r.is_valid ? '✓ Đúng' : '✗ Sai'}</span></span></td><td class="note">${note}</td></tr>`;
+    }).join('') : '<tr><td colspan="6" class="empty">Không có dòng nào</td></tr>';
+    if (activeIdx >= 0) setActive(activeIdx, false);
+  }
+
+  // ---- duplicate group highlight (editor marks + table rows + error entry) ----
+  function highlightGroup(plate) {
+    document.querySelectorAll('.same').forEach((el) => el.classList.remove('same'));
+    const g = plate && groups.get(plate);
+    if (!g) return;
+    for (const r of g) {
+      backdrop.querySelector(`mark[data-i="${r.i}"]`)?.classList.add('same');
+      tbody.querySelector(`tr[data-i="${r.i}"]`)?.classList.add('same');
+    }
+    $('errors').querySelector(`li[data-plate="${CSS.escape(plate)}"]`)?.classList.add('same');
+  }
+  const activePlate = () => (activeIdx >= 0 && rows[activeIdx]?.is_valid ? rows[activeIdx].plate : null);
+
+  // ---- navigation: table/errors -> input ----
+  function jumpTo(i) {
+    const r = rows[i];
+    if (!r) return;
+    input.focus({ preventScroll: true });
+    input.setSelectionRange(r.start, r.end);
+    const mark = backdrop.querySelector(`mark[data-i="${i}"]`);
+    if (mark) input.scrollTop = Math.max(0, mark.offsetTop - input.clientHeight / 3);
+    backdrop.scrollTop = input.scrollTop;
+    setActive(i, false);
+    input.closest('.card').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  // ---- navigation: caret in input -> table row ----
+  function setActive(i, scrollRow) {
+    activeIdx = i;
+    backdrop.querySelectorAll('mark.active').forEach((m) => m.classList.remove('active'));
+    tbody.querySelectorAll('tr.active').forEach((t) => t.classList.remove('active'));
+    highlightGroup(activePlate());
+    if (i < 0) return;
+    backdrop.querySelector(`mark[data-i="${i}"]`)?.classList.add('active');
+    const tr = tbody.querySelector(`tr[data-i="${i}"]`);
+    if (tr) {
+      tr.classList.add('active');
+      if (scrollRow) {
+        const wrap = tr.closest('.tablewrap');
+        wrap.scrollTop = tr.offsetTop - wrap.clientHeight / 2;
+      }
+    }
+  }
+  function syncFromCaret() {
+    const p = input.selectionStart;
+    const r = rows.find((x) => p >= x.start && p <= x.end);
+    setActive(r ? r.i : -1, true);
+  }
+
+  // ---- edits (fix / delete) with undo ----
+  function setText(text, msg) {
+    if (text === input.value) return;
+    undoStack.push(input.value);
+    $('btnUndo').disabled = false;
+    const top = input.scrollTop;
+    input.value = text;
+    input.scrollTop = top;
+    activeIdx = -1;
+    render();
+    backdrop.scrollTop = input.scrollTop;
+    if (msg) toast(msg);
+  }
+  function undo() {
+    if (!undoStack.length) return;
+    const top = input.scrollTop;
+    input.value = undoStack.pop();
+    input.scrollTop = top;
+    $('btnUndo').disabled = !undoStack.length;
+    render();
+    toast('Đã hoàn tác');
+  }
+
+  function applyFixes(list) {
+    let text = input.value;
+    for (const r of [...list].sort((a, b) => b.start - a.start))
+      text = text.slice(0, r.start) + r.diag.candidates.join(', ') + text.slice(r.end);
+    setText(text, `Đã sửa ${list.length} phần`);
+  }
+  function deleteRow(r) {
+    setText(SP.removePart(input.value, r), `Đã xoá ${r.plate} (#${r.first_pos})`);
+  }
+  function deleteDuplicates(plate) {
+    const { text, removed } = SP.removeDuplicates(input.value, plate);
+    setText(text, `Đã xoá ${removed} bản trùng${plate ? ' của ' + plate : ''}`);
+  }
+
+  function onClickRow(e) {
+    const btn = e.target.closest('[data-fix],[data-del],[data-deldup]');
+    if (btn) {
+      e.stopPropagation();
+      if (btn.dataset.fix) applyFixes([rows[+btn.dataset.fix]]);
+      else if (btn.dataset.del) deleteRow(rows[+btn.dataset.del]);
+      else deleteDuplicates(btn.dataset.deldup);
+      return;
+    }
+    const el = e.target.closest('[data-i]');
+    if (el) jumpTo(+el.dataset.i);
+  }
+  function onHover(e) {
+    const el = e.target.closest('[data-i]');
+    const r = el && rows[+el.dataset.i];
+    highlightGroup(r && r.is_valid ? r.plate : activePlate());
+  }
+
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 1600);
+  }
+
+  function loadText(text) { input.value = text; input.scrollTop = 0; activeIdx = -1; render(); }
+  function loadFile(f) { if (f) f.text().then((t) => setText(t, `Đã nạp ${f.name}`)); }
+
+  // ---- wiring ----
+  let deb;
+  input.addEventListener('input', () => { clearTimeout(deb); deb = setTimeout(render, 120); });
+  input.addEventListener('scroll', () => { backdrop.scrollTop = input.scrollTop; });
+  ['click', 'keyup', 'select'].forEach((ev) => input.addEventListener(ev, syncFromCaret));
+  new ResizeObserver(() => { backdrop.scrollTop = input.scrollTop; }).observe(input);
+  for (const el of [tbody, $('errors')]) {
+    el.addEventListener('click', onClickRow);
+    el.addEventListener('mouseover', onHover);
+    el.addEventListener('mouseleave', () => highlightGroup(activePlate()));
+  }
+  $('filter').addEventListener('change', renderTable);
+  $('sep').addEventListener('change', render);
+  $('btnFixAll').onclick = () => applyFixes(rows.filter((r) => r.diag && r.diag.candidates.length));
+  $('btnDelDupAll').onclick = () => deleteDuplicates();
+  $('btnUndo').onclick = undo;
+  $('btnSample').onclick = () => setText($('sample').textContent, 'Đã nạp dữ liệu mẫu');
+  $('btnClear').onclick = () => { setText(''); input.focus(); };
+  $('btnOpen').onclick = () => $('file').click();
+  $('file').onchange = (e) => { loadFile(e.target.files[0]); e.target.value = ''; };
+  input.addEventListener('dragover', (e) => e.preventDefault());
+  input.addEventListener('drop', (e) => { if (e.dataTransfer.files.length) { e.preventDefault(); loadFile(e.dataTransfer.files[0]); } });
+  $('btnCopy').onclick = async () => {
+    const v = $('out').value;
+    try { await navigator.clipboard.writeText(v); } catch { $('out').select(); document.execCommand('copy'); }
+    toast(`Đã copy ${SP.splitPlatesArray(input.value).length} biển`);
+  };
+
+  loadText(document.body.classList.contains('beta') ? '' : $('sample').textContent);
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'd') { e.preventDefault(); document.body.classList.toggle('beta'); }
+  });
+})();
+</script>
+</body>
+</html>

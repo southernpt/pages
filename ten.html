@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tách tên lái xe</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --line: #dde1e6; --text: #1f2328; --muted: #6a737d;
+    --ok: #1a7f37; --ok-bg: #dafbe1; --bad: #cf222e; --bad-bg: #ffd8d3; --dup: #9a6700; --dup-bg: #fff1b8;
+    --warn: #8250df; --warn-bg: #ece2ff;
+    --accent: #0969da; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 12px 20px; background: var(--card); border-bottom: 1px solid var(--line); display: flex; gap: 16px; align-items: center; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 16px; margin: 0; }
+  header h1 small { color: var(--muted); font-weight: normal; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { padding: 2px 10px; border-radius: 999px; background: #eef1f4; font-size: 13px; cursor: default; }
+  .chip b { font-variant-numeric: tabular-nums; }
+  .chip.ok { background: var(--ok-bg); color: var(--ok); }
+  .chip.bad { background: var(--bad-bg); color: var(--bad); cursor: pointer; }
+  .chip.dup { background: var(--dup-bg); color: var(--dup); cursor: pointer; }
+  .chip.warn { background: var(--warn-bg); color: var(--warn); cursor: pointer; }
+  main { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; padding: 16px 20px; }
+  @media (max-width: 960px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
+  .card h2 { font-size: 14px; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+  .card h2 .sp { flex: 1; }
+  .full { grid-column: 1 / -1; }
+  button, select { font: inherit; font-size: 13px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 6px; background: #f6f8fa; cursor: pointer; }
+  button:hover { background: #eef1f4; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.del { color: var(--bad); }
+
+  /* Editor = transparent textarea over a highlight backdrop with identical metrics */
+  .editor { position: relative; height: 360px; }
+  .editor textarea, .editor .backdrop {
+    position: absolute; inset: 0; margin: 0; width: 100%; height: 100%;
+    padding: 10px; border: 1px solid var(--line); border-radius: 6px;
+    font: 13px/20px var(--mono); letter-spacing: 0; tab-size: 4;
+    white-space: pre-wrap; overflow-wrap: break-word; word-break: normal;
+    overflow-y: scroll; overflow-x: hidden;
+  }
+  .editor .backdrop { color: transparent; background: #fff; pointer-events: none; }
+  .editor textarea { background: transparent; color: var(--text); resize: none; outline: none; caret-color: var(--text); }
+  .editor textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #0969da22; }
+  .backdrop mark { color: transparent; border-radius: 3px; }
+  .backdrop mark.ok { background: #dafbe18c; }
+  .backdrop mark.bad { background: var(--bad-bg); box-shadow: inset 0 -2px 0 var(--bad); }
+  .backdrop mark.warn { background: var(--warn-bg); box-shadow: inset 0 -2px 0 var(--warn); }
+  .backdrop mark.dup { background: var(--dup-bg); box-shadow: inset 0 -2px 0 var(--dup); }
+  .backdrop mark.dupsrc { box-shadow: inset 0 -2px 0 var(--dup); }
+  .backdrop mark.same { background: #ffd33d; box-shadow: 0 0 0 2px #bf8700; }
+  .backdrop mark.active { background: #b6d7ff; box-shadow: 0 0 0 2px var(--accent); }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .legend span { display: inline-block; padding: 0 6px; border-radius: 3px; margin-right: 6px; }
+
+  #out { width: 100%; height: 150px; font: 13px/20px var(--mono); padding: 8px; border: 1px solid var(--line); border-radius: 6px; resize: vertical; background: #fbfcfd; }
+  .errors { list-style: none; margin: 0; padding: 0; max-height: 190px; overflow: auto; }
+  .errors li { padding: 6px 8px; border-left: 3px solid var(--bad); background: #fff6f5; margin-bottom: 6px; border-radius: 0 6px 6px 0; cursor: pointer; }
+  .errors li.dup { border-color: var(--dup); background: #fffbea; }
+  .errors li.warn { border-color: var(--warn); background: #f7f2ff; }
+  .errors li.same { background: #fff1b8; }
+  .errors li:hover { filter: brightness(.97); }
+  .errors code { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; }
+  .errors .why { color: var(--bad); font-size: 12px; }
+  .errors li.dup .why { color: var(--dup); }
+  .errors li.warn .why { color: var(--warn); }
+  .empty { color: var(--muted); font-style: italic; }
+
+  .tablewrap { max-height: 520px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; table-layout: fixed; min-width: 900px; }
+  th, td { padding: 5px 8px; border-bottom: 1px solid #eef0f2; text-align: left; vertical-align: top; }
+  th { position: sticky; top: 0; background: #f6f8fa; z-index: 1; font-weight: 600; }
+  td { cursor: pointer; }
+  td.mono { font-family: var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+  td.note .tag { white-space: normal; display: inline-block; }
+  td.note .cand { overflow-wrap: anywhere; }
+  td.num { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  tr:hover td { background: #f3f6fa; }
+  tr.bad td { background: #fff6f5; }
+  tr.warn td { background: #f7f2ff; }
+  tr.dup td { background: #fffbea; }
+  tr.dupsrc td:first-child, tr.dup td:first-child { box-shadow: inset 3px 0 0 var(--dup); }
+  tr.same td { background: #fff1b8 !important; }
+  tr.active td { background: #ddebff !important; }
+  tr.group-start td { border-top: 2px solid #e8d48a; }
+  .tag { font-size: 12px; padding: 0 6px; border-radius: 4px; white-space: nowrap; }
+  .tag.ok { background: var(--ok-bg); color: var(--ok); }
+  .tag.bad { background: var(--bad-bg); color: var(--bad); }
+  .tag.dup { background: var(--dup-bg); color: var(--dup); }
+  .tag.warn { background: var(--warn-bg); color: var(--warn); }
+  .cand { font-family: var(--mono); font-size: 12px; color: var(--ok); }
+  .fix { font-size: 12px; padding: 0 6px; margin-left: 4px; }
+  .pos { font-family: var(--mono); font-size: 12px; padding: 0 4px; border-radius: 3px; background: #fff; border: 1px solid #e8d48a; cursor: pointer; margin-right: 2px; }
+  .pos:hover { background: #ffd33d; }
+  .pos.first { font-weight: 700; }
+  .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #1f2328; color: #fff; padding: 6px 14px; border-radius: 6px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: .92; }
+
+  /* ---- Chế độ beta (người dùng phổ thông): ẩn chữ kỹ thuật, KHÔNG xoá. Ctrl+Shift+D để bật/tắt. ---- */
+  .friendly { display: none; }
+  body.beta .tech { display: none !important; }
+  body.beta .friendly { display: revert; }
+  body.beta col.c-idx { visibility: collapse; width: 0; }
+  body.beta .c-idx { display: none; }
+  .steps { margin: 12px 20px 0; padding: 10px 14px; background: #ddf4ff; border: 1px solid #54aeff66; border-radius: 8px; font-size: 14px; }
+  .steps ol { margin: 4px 0 0; padding-left: 22px; }
+  .beta-tag { font-size: 11px; font-weight: 600; color: #fff; background: #8250df; padding: 1px 6px; border-radius: 4px; vertical-align: middle; }
+</style>
+</head>
+<body class="beta">
+<header>
+  <h1>Tách tên lái xe <small class="tech">— parity JS của <code>split_driver_names()</code> / <code>split_driver_names_array()</code></small><span class="friendly beta-tag">BETA</span></h1>
+  <div class="chips" id="chips"></div>
+</header>
+
+<div class="steps friendly">
+  <b>Cách dùng</b>
+  <ol>
+    <li>Dán danh sách tên vào ô <b>Dữ liệu nhập</b> (có thể kéo-thả file .txt vào ô).</li>
+    <li>Xem các chỗ tô <span style="background:var(--bad-bg)">đỏ</span> (sai) và <span style="background:var(--dup-bg)">vàng</span> (trùng). Bấm <b>Sửa</b> / <b>Xoá</b> để sửa nhanh, hoặc sửa trực tiếp trong ô.</li>
+    <li>Bấm <b>Copy</b> để lấy danh sách tên đã chuẩn hoá. Bấm vào một dòng trong bảng để nhảy tới chỗ đó trong ô nhập.</li>
+  </ol>
+</div>
+<main>
+  <section class="card">
+    <h2><span class="tech">Dữ liệu thô</span><span class="friendly">Dữ liệu nhập</span> <span class="sp"></span>
+      <button id="btnSample" title="Nạp dữ liệu mẫu để thử"><span class="tech">Mẫu test-names.txt</span><span class="friendly">Thử dữ liệu mẫu</span></button>
+      <button id="btnSample2" title="Dữ liệu có trùng / sai / khác dấu để thử">Mẫu có lỗi</button>
+      <button id="btnOpen">Mở file…</button>
+      <button id="btnUndo" title="Hoàn tác lần sửa / xoá gần nhất" disabled>↶ Hoàn tác</button>
+      <button id="btnClear"><span class="tech">Xoá</span><span class="friendly">Xoá hết</span></button>
+      <input type="file" id="file" accept=".txt,.csv,text/*" hidden>
+    </h2>
+    <div class="editor">
+      <div class="backdrop" id="backdrop" aria-hidden="true"></div>
+      <textarea id="input" spellcheck="false" placeholder="Dán danh sách tên, cách nhau bởi dấu , ; &amp; /"></textarea>
+    </div>
+    <div class="hint legend">
+      <span style="background:#dafbe1">hợp lệ</span><span style="background:var(--warn-bg)">cảnh báo</span><span style="background:var(--bad-bg)">không hợp lệ</span><span style="background:var(--dup-bg)">trùng</span>
+      Dấu phân cách: <b>,</b> <b>;</b> <b>&amp;</b> <b>/</b> — xuống dòng thành khoảng trắng (không tách). Tên được chuẩn hoá thành <i>Viết Hoa Chữ Đầu</i>.
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 title="Đã chuẩn hoá, bỏ trùng, giữ thứ tự xuất hiện đầu">Tên hợp lệ <small class="tech" style="font-weight:normal;color:var(--muted)">(split_driver_names_array)</small><span class="sp"></span>
+      <select id="sep"><option value=", ">, </option><option value="\n">xuống dòng</option><option value="; ">; </option></select>
+      <button id="btnCopy" class="primary">Copy</button>
+    </h2>
+    <textarea id="out" readonly></textarea>
+
+    <h2 style="margin-top:12px">Lỗi / cảnh báo <span class="sp"></span>
+      <button id="btnFixAll" title="Thay mỗi tên lỗi bằng tên gợi ý (bỏ số, ký tự lạ, ghi chú trong ngoặc)">Áp dụng mọi gợi ý</button>
+      <button id="btnDelDupAll" class="del" title="Xoá mọi lần xuất hiện lặp lại trong dữ liệu thô, giữ lần đầu">Xoá mọi trùng</button>
+    </h2>
+    <ul class="errors" id="errors"></ul>
+  </section>
+
+  <section class="card full">
+    <h2><span class="tech">Bảng đối chiếu</span><span class="friendly">Chi tiết từng mục</span> <small style="font-weight:normal;color:var(--muted)">— bấm vào ô để nhảy tới vị trí trong <span class="tech">dữ liệu thô</span><span class="friendly">ô nhập</span></small><span class="sp"></span>
+      <select id="filter">
+        <option value="all">Tất cả</option>
+        <option value="bad">Không hợp lệ</option>
+        <option value="warn">Cảnh báo</option>
+        <option value="ok">Hợp lệ</option>
+        <option value="dup">Trùng (gộp theo tên)</option>
+      </select>
+    </h2>
+    <div class="tablewrap">
+      <table>
+        <colgroup><col class="c-idx" style="width:48px"><col style="width:76px"><col style="width:28%"><col style="width:24%"><col style="width:72px"><col></colgroup>
+        <thead><tr><th class="c-idx">#</th><th><span class="tech">first_pos</span><span class="friendly">Vị trí</span></th><th><span class="tech">raw</span><span class="friendly">Bạn nhập</span></th><th><span class="tech">name</span><span class="friendly">Tên chuẩn</span></th><th><span class="tech">is_valid</span><span class="friendly">Kết quả</span></th><th>Ghi chú</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script type="text/plain" id="sample">LÊ VĂN KHÁNH, HOÀNG ANH NAM, CAO QUỐC VĂN, NGUYỄN MINH QUANG, , PHẠM TRỌNG VŨ BÌNH CƠ, ĐÀO NGỌC SƠN, ĐẶNG VĂN CHÍNH, NGUYỄN XUÂN HÀ, LÊ ĐỨC TUẤN, HOÀNG XUÂN GIANG, CHU VĂN NINH, TRẦN VĂN HIỂU, TRỊNH TRUNG TRUNG
+</script>
+<script type="text/plain" id="sample2">LÊ VĂN KHÁNH, hoàng anh nam; Cao Quốc Văn & lê văn khánh / NGUYỄN MINH QUANG, , PHẠM TRỌNG VŨ BÌNH CƠ, Đào Ngọc Sơn 0912345678, NguyễnXuânHà, (Tài xế) Lê Đức Tuấn, Le Duc Tuan, Hùng,
+TRẦN VĂN
+HIỂU; trần văn hiểu, Nguyễn Minh  Quang, Chu-Văn Ninh</script>
+
+<script>
+/* ==== BEGIN split-names.js (giữ y hệt file split-names.js) ==== */
+// Parity port of split-names.sql (split_driver_names / split_driver_names_array) to JavaScript.
+// Behaviour must match PostgreSQL exactly — verify with: node split-names.test.js
+// Works in browser (window.SplitNames) and Node (module.exports).
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.SplitNames = api;
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  // Same character class as the SQL is_valid regex: A-Z + Vietnamese letters
+  const VN = 'A-Za-zÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝàáâãèéêìíòóôõùúýĂăĐđĨĩŨũƠơƯưẠ-ỹ';
+  const VALID_RE = new RegExp(`^[${VN}]+( [${VN}]+)+$`, 'u');
+  const WS_RE = /[ \t\r\n\f\v\u00A0]+/g;          // '[ \t\r\n\f\v\u00A0]+'
+  const CAMEL_RE = /(\p{Ll})(\p{Lu})/gu;          // '([[:lower:]])([[:upper:]])'
+  const ALNUM_RE = /[\p{L}\p{Nd}\p{Nl}]/u;        // [:alnum:] under a UTF-8 glibc locale
+
+  // PG btrim(text): trims ONLY ' '
+  const btrim = (s) => s.replace(/^ +| +$/g, '');
+
+  // per-character case mapping (PG never expands one char into several)
+  const up1 = (c) => { const u = c.toUpperCase(); return [...u].length === 1 ? u : c; };
+  const lo1 = (c) => { const l = c.toLowerCase(); return [...l].length === 1 ? l : c; };
+
+  // PG initcap(): first alnum char of each word upper, rest lower; word = run of alnum chars
+  function initcap(s) {
+    let out = '', inWord = false;
+    for (const ch of s) {
+      if (ALNUM_RE.test(ch)) { out += inWord ? lo1(ch) : up1(ch); inWord = true; }
+      else { out += ch; inWord = false; }
+    }
+    return out;
+  }
+
+  function normalizeName(raw) {
+    const camel = raw.normalize('NFC').replace(CAMEL_RE, '$1 $2');
+    return initcap(btrim(camel.replace(WS_RE, ' ')));
+  }
+
+  // Like split_driver_names() but with char offsets + separator positions (for the UI).
+  function splitNamesDetailed(input) {
+    if (input == null) return [];
+    const rows = [];
+    const sepRe = /[,;&/]/g;
+    let segStart = 0, ord = 0, m;
+    const pushSeg = (segEnd, sepAfter) => {
+      ord += 1;
+      const seg = input.slice(segStart, segEnd);
+      const raw = btrim(seg);
+      const name = normalizeName(raw);
+      if (name === '') return; // WHERE name <> ''
+      const lead = seg.length - seg.replace(/^ +/, '').length;
+      rows.push({
+        raw, name, is_valid: VALID_RE.test(name), first_pos: ord,
+        start: segStart + lead, end: segStart + lead + raw.length,
+        sepBefore: segStart - 1, sepAfter,
+      });
+    };
+    while ((m = sepRe.exec(input)) !== null) {
+      pushSeg(m.index, m.index);
+      segStart = m.index + 1;
+    }
+    pushSeg(input.length, -1);
+    return rows;
+  }
+
+  // split_driver_names(p_input) -> rows {raw, name, is_valid, first_pos}
+  function splitNames(input) {
+    return splitNamesDetailed(input).map(({ raw, name, is_valid, first_pos }) => ({ raw, name, is_valid, first_pos }));
+  }
+
+  // split_driver_names_array(p_input) -> valid names, deduped, ordered by first appearance
+  function splitNamesArray(input) {
+    const seen = new Set(), out = [];
+    for (const r of splitNames(input)) {
+      if (r.is_valid && !seen.has(r.name)) { seen.add(r.name); out.push(r.name); }
+    }
+    return out;
+  }
+
+  // ---- Diagnostics / helpers (NOT part of SQL parity; used by the demo UI) ----
+
+  // "Nguyễn Văn Đức" -> "nguyen van duc" (for near-duplicate detection)
+  const foldAccents = (s) => s.normalize('NFD').replace(/\p{M}/gu, '').replace(/[đĐ]/g, 'd').toLowerCase();
+
+  const LONG_NAME_WORDS = 5;
+
+  function diagnose(row) {
+    const words = row.name.split(' ').length;
+    if (row.is_valid) {
+      if (words >= LONG_NAME_WORDS)
+        return { level: 'warn', reason: `Có ${words} chữ — có thể là 2 tên dính nhau (thiếu dấu phân cách , ; & /)`, candidates: [] };
+      return null;
+    }
+    // suggestion: drop "(notes)" / "[notes]", keep only letters, collapse spaces
+    const cleaned = normalizeName(
+      row.name.replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(new RegExp(`[^${VN} ]`, 'gu'), ' '));
+    const candidates = VALID_RE.test(cleaned) && cleaned !== row.name ? [cleaned] : [];
+    let reason;
+    if (/[0-9]/.test(row.name)) reason = 'Chứa chữ số (số điện thoại / biển số?)';
+    else if (new RegExp(`[^${VN} ]`, 'u').test(row.name)) {
+      const bad = [...new Set(row.name.replace(new RegExp(`[${VN} ]`, 'gu'), ''))].join(' ');
+      reason = `Chứa ký tự không phải chữ cái: ${bad}`;
+    } else if (words < 2) reason = 'Chỉ có 1 chữ — thiếu họ hoặc tên';
+    else reason = 'Không hợp lệ';
+    return { level: 'bad', reason, candidates };
+  }
+
+  // Valid rows whose normalized name already appeared earlier.
+  function findDuplicates(rows) {
+    const first = new Map(), dups = [];
+    for (const r of rows) {
+      if (!r.is_valid) continue;
+      if (first.has(r.name)) dups.push({ row: r, firstRow: first.get(r.name) });
+      else first.set(r.name, r);
+    }
+    return dups;
+  }
+
+  // Distinct valid names that only differ by accents ("Nguyen Van A" vs "Nguyễn Văn A").
+  function findNearDuplicates(rows) {
+    const byFold = new Map();
+    for (const r of rows) {
+      if (!r.is_valid) continue;
+      const k = foldAccents(r.name);
+      if (!byFold.has(k)) byFold.set(k, new Map());
+      const names = byFold.get(k);
+      if (!names.has(r.name)) names.set(r.name, r);
+    }
+    return [...byFold.values()].filter((m) => m.size > 1).map((m) => [...m.values()]);
+  }
+
+  // Remove one part plus one adjacent separator: "a, X, b" -> "a, b"; "a, X" -> "a".
+  function removePart(text, r) {
+    if (r.sepAfter >= 0) {
+      let end = r.sepAfter + 1;
+      while (text[end] === ' ' || text[end] === '\t') end++;
+      return text.slice(0, r.start) + text.slice(end);
+    }
+    if (r.sepBefore >= 0) {
+      let start = r.sepBefore;
+      while (start > 0 && (text[start - 1] === ' ' || text[start - 1] === '\t')) start--;
+      return text.slice(0, start) + text.slice(r.end);
+    }
+    return text.slice(0, r.start) + text.slice(r.end);
+  }
+
+  // Remove every duplicate occurrence (keeps the first). Last-first + re-split => no overlaps.
+  function removeDuplicates(text, onlyName) {
+    let removed = 0;
+    for (;;) {
+      const dups = findDuplicates(splitNamesDetailed(text)).filter((d) => !onlyName || d.row.name === onlyName);
+      if (!dups.length) return { text, removed };
+      text = removePart(text, dups[dups.length - 1].row);
+      removed++;
+    }
+  }
+
+  return {
+    splitNames, splitNamesArray, splitNamesDetailed, normalizeName, initcap,
+    diagnose, findDuplicates, findNearDuplicates, foldAccents, removePart, removeDuplicates,
+  };
+});
+/* ==== END split-names.js ==== */
+</script>
+
+<script>
+(() => {
+  const SN = window.SplitNames;
+  const $ = (id) => document.getElementById(id);
+  const input = $('input'), backdrop = $('backdrop'), tbody = $('tbody');
+  let rows = [];
+  let groups = new Map();   // name -> [first, ...copies]   (exact duplicates after normalization)
+  let near = [];            // [[rowA, rowB, ...]]           (same name ignoring accents)
+  let activeIdx = -1;
+  const undoStack = [];
+
+  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const show = (s) => esc(s).replace(/\n/g, '<span style="color:#aaa">↵</span>\n');
+  const posChips = (g) => g.map((r, k) =>
+    `<span class="pos${k ? '' : ' first'}" data-i="${r.i}" title="${k ? 'bản trùng' : 'lần đầu (giữ lại)'}">#${r.first_pos}</span>`).join('');
+
+  function analyse(text) {
+    const r = SN.splitNamesDetailed(text);
+    r.forEach((row, i) => { row.i = i; row.diag = SN.diagnose(row); });
+    groups = new Map();
+    for (const { row, firstRow } of SN.findDuplicates(r)) {
+      row.dupOf = firstRow;
+      if (!groups.has(row.name)) groups.set(row.name, [firstRow]);
+      groups.get(row.name).push(row);
+    }
+    near = SN.findNearDuplicates(r);
+    const nearOf = new Map();
+    near.forEach((g) => g.forEach((x) => nearOf.set(x.name, g)));
+    for (const row of r) {
+      row.isDupSrc = !row.dupOf && groups.has(row.name);
+      row.near = row.is_valid ? nearOf.get(row.name) : null;
+      row.kind = !row.is_valid ? 'bad' : row.dupOf ? 'dup' : (row.diag || row.near) ? 'warn' : 'ok';
+    }
+    return r;
+  }
+
+  function render() {
+    const text = input.value;
+    const keep = activeIdx;
+    rows = analyse(text);
+    activeIdx = -1;
+
+    let html = '', pos = 0;
+    for (const r of rows) {
+      html += esc(text.slice(pos, r.start));
+      html += `<mark class="${r.kind}${r.isDupSrc ? ' dupsrc' : ''}" data-i="${r.i}">${esc(text.slice(r.start, r.end))}</mark>`;
+      pos = r.end;
+    }
+    backdrop.innerHTML = html + esc(text.slice(pos)) + '\n ';
+    backdrop.scrollTop = input.scrollTop;
+
+    const count = (k) => rows.filter((r) => r.kind === k).length;
+    const nBad = count('bad'), nDup = count('dup'), nWarn = count('warn');
+    const names = SN.splitNamesArray(text);
+    $('chips').innerHTML =
+      `<span class="chip"><span class="tech">Phần tách</span><span class="friendly">Tổng số mục</span>: <b>${rows.length}</b></span>` +
+      `<span class="chip ok">Hợp lệ: <b>${rows.length - nBad}</b></span>` +
+      `<span class="chip ok">Tên duy nhất: <b>${names.length}</b></span>` +
+      `<span class="chip dup" data-filter="dup">Trùng: <b>${nDup}</b> (${groups.size} tên)</span>` +
+      `<span class="chip warn" data-filter="warn">Cảnh báo: <b>${nWarn}</b></span>` +
+      `<span class="chip bad" data-filter="bad">Không hợp lệ: <b>${nBad}</b></span>`;
+
+    $('out').value = names.join($('sep').value.replace('\\n', '\n'));
+
+    const items = [];
+    for (const r of rows) {
+      if (r.kind === 'bad')
+        items.push(`<li data-i="${r.i}"><div><b>#${r.first_pos}</b> <code>${show(r.raw)}</code></div>
+          <div class="why">✖ ${esc(r.diag.reason)}</div>
+          ${r.diag.candidates.length ? `<div>Gợi ý: <span class="cand">${esc(r.diag.candidates[0])}</span>
+            <button class="fix" data-fix="${r.i}">Sửa</button></div>` : ''}</li>`);
+      else if (r.diag && r.diag.level === 'warn')
+        items.push(`<li class="warn" data-i="${r.i}"><div><b>#${r.first_pos}</b> <code>${esc(r.name)}</code></div>
+          <div class="why">⚠ ${esc(r.diag.reason)}</div></li>`);
+    }
+    for (const g of near)
+      items.push(`<li class="warn" data-i="${g[0].i}"><div>${g.map((x) =>
+          `<span class="pos" data-i="${x.i}">#${x.first_pos}</span> <code>${esc(x.name)}</code>`).join(' ↔ ')}</div>
+        <div class="why">⚠ Có thể trùng (chỉ khác dấu). Thống nhất thành:
+          ${g.map((x) => `<button class="fix" data-unify="${esc(x.name)}">${esc(x.name)}</button>`).join('')}</div></li>`);
+    for (const [name, g] of groups)
+      items.push(`<li class="dup" data-i="${g[1].i}" data-name="${esc(name)}">
+        <div><b>${esc(name)}</b> xuất hiện <b>${g.length}</b> lần: ${posChips(g)}</div>
+        <div class="why">⚠ Trùng — chỉ giữ lần đầu
+          <button class="fix del" data-deldup="${esc(name)}">Xoá ${g.length - 1} bản trùng</button></div></li>`);
+    $('errors').innerHTML = items.length ? items.join('') : '<li class="empty" style="border:0;background:none">Không có lỗi 🎉</li>';
+    $('btnFixAll').disabled = !rows.some((r) => r.diag && r.diag.candidates.length);
+    $('btnDelDupAll').disabled = !nDup;
+    $('btnDelDupAll').textContent = nDup ? `Xoá mọi trùng (${nDup})` : 'Xoá mọi trùng';
+
+    renderTable();
+    if (keep >= 0 && keep < rows.length) setActive(keep, false);
+  }
+
+  function renderTable() {
+    const f = $('filter').value;
+    const list = f === 'dup'
+      ? [...groups.values()].flatMap((g) => g.map((r, k) => ({ r, groupStart: k === 0 })))
+      : rows.filter((r) => f === 'all' || r.kind === f).map((r) => ({ r }));
+    tbody.innerHTML = list.length ? list.map(({ r, groupStart }) => {
+      const notes = [];
+      if (r.kind === 'bad') {
+        notes.push(`<span class="tag bad">${esc(r.diag.reason)}</span>`);
+        if (r.diag.candidates.length)
+          notes.push(`<div class="cand">→ ${esc(r.diag.candidates[0])} <button class="fix" data-fix="${r.i}">Sửa</button></div>`);
+      }
+      if (r.dupOf) notes.push(`<span class="tag dup">trùng #${r.dupOf.first_pos}</span> <button class="fix del" data-del="${r.i}">Xoá</button>`);
+      if (r.isDupSrc) {
+        const n = groups.get(r.name).length;
+        notes.push(`<span class="tag dup">lần đầu · ${n} lần</span> <button class="fix del" data-deldup="${esc(r.name)}">Xoá ${n - 1} bản trùng</button>`);
+      }
+      if (r.diag && r.diag.level === 'warn') notes.push(`<span class="tag warn">${esc(r.diag.reason)}</span>`);
+      if (r.near) notes.push(`<span class="tag warn">khác dấu: ${esc(r.near.filter((x) => x.name !== r.name).map((x) => x.name).join(', '))}</span>`);
+      const cls = [r.kind, r.isDupSrc ? 'dupsrc' : '', groupStart ? 'group-start' : ''].join(' ');
+      return `<tr class="${cls}" data-i="${r.i}">
+        <td class="num c-idx">${r.i + 1}</td><td class="num">${r.first_pos}</td>
+        <td class="mono">${show(r.raw)}</td><td class="mono">${esc(r.name)}</td>
+        <td><span class="tag ${r.is_valid ? 'ok' : 'bad'}"><span class="tech">${r.is_valid}</span><span class="friendly">${r.is_valid ? '✓ Đúng' : '✗ Sai'}</span></span></td><td class="note">${notes.join(' ')}</td></tr>`;
+    }).join('') : '<tr><td colspan="6" class="empty">Không có dòng nào</td></tr>';
+    if (activeIdx >= 0) setActive(activeIdx, false);
+  }
+
+  // ---- group highlight: exact duplicates + accent-only variants ----
+  function groupOf(r) {
+    if (!r || !r.is_valid) return [];
+    const exact = rows.filter((x) => x.is_valid && x.name === r.name);
+    const variants = r.near ? rows.filter((x) => x.is_valid && r.near.some((n) => n.name === x.name)) : [];
+    return exact.length > 1 || variants.length ? [...new Set([...exact, ...variants])] : [];
+  }
+  function highlightGroup(r) {
+    document.querySelectorAll('.same').forEach((el) => el.classList.remove('same'));
+    for (const x of groupOf(r)) {
+      backdrop.querySelector(`mark[data-i="${x.i}"]`)?.classList.add('same');
+      tbody.querySelector(`tr[data-i="${x.i}"]`)?.classList.add('same');
+    }
+    if (r && groups.has(r.name)) $('errors').querySelector(`li[data-name="${CSS.escape(r.name)}"]`)?.classList.add('same');
+  }
+
+  function jumpTo(i) {
+    const r = rows[i];
+    if (!r) return;
+    input.focus({ preventScroll: true });
+    input.setSelectionRange(r.start, r.end);
+    const mark = backdrop.querySelector(`mark[data-i="${i}"]`);
+    if (mark) input.scrollTop = Math.max(0, mark.offsetTop - input.clientHeight / 3);
+    backdrop.scrollTop = input.scrollTop;
+    setActive(i, false);
+    input.closest('.card').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  function setActive(i, scrollRow) {
+    activeIdx = i;
+    backdrop.querySelectorAll('mark.active').forEach((m) => m.classList.remove('active'));
+    tbody.querySelectorAll('tr.active').forEach((t) => t.classList.remove('active'));
+    highlightGroup(rows[i]);
+    if (i < 0) return;
+    backdrop.querySelector(`mark[data-i="${i}"]`)?.classList.add('active');
+    const tr = tbody.querySelector(`tr[data-i="${i}"]`);
+    if (tr) {
+      tr.classList.add('active');
+      if (scrollRow) { const w = tr.closest('.tablewrap'); w.scrollTop = tr.offsetTop - w.clientHeight / 2; }
+    }
+  }
+  function syncFromCaret() {
+    const p = input.selectionStart;
+    const r = rows.find((x) => p >= x.start && p <= x.end);
+    setActive(r ? r.i : -1, true);
+  }
+
+  // ---- edits with undo ----
+  function setText(text, msg) {
+    if (text === input.value) return;
+    undoStack.push(input.value);
+    $('btnUndo').disabled = false;
+    const top = input.scrollTop;
+    input.value = text;
+    input.scrollTop = top;
+    activeIdx = -1;
+    render();
+    backdrop.scrollTop = input.scrollTop;
+    if (msg) toast(msg);
+  }
+  function undo() {
+    if (!undoStack.length) return;
+    const top = input.scrollTop;
+    input.value = undoStack.pop();
+    input.scrollTop = top;
+    $('btnUndo').disabled = !undoStack.length;
+    render();
+    toast('Đã hoàn tác');
+  }
+  function replaceRows(list, replacement, msg) {
+    let text = input.value;
+    for (const r of [...list].sort((a, b) => b.start - a.start))
+      text = text.slice(0, r.start) + replacement(r) + text.slice(r.end);
+    setText(text, msg);
+  }
+  const applyFixes = (list) => replaceRows(list, (r) => r.diag.candidates[0], `Đã sửa ${list.length} tên`);
+  function unify(name) {
+    const g = near.find((g) => g.some((x) => x.name === name));
+    const others = new Set(g.map((x) => x.name).filter((n) => n !== name));
+    const list = rows.filter((r) => r.is_valid && others.has(r.name));
+    replaceRows(list, () => name, `Đã thống nhất ${list.length} chỗ thành ${name}`);
+  }
+  const deleteRow = (r) => setText(SN.removePart(input.value, r), `Đã xoá ${r.name} (#${r.first_pos})`);
+  function deleteDuplicates(name) {
+    const { text, removed } = SN.removeDuplicates(input.value, name);
+    setText(text, `Đã xoá ${removed} bản trùng${name ? ' của ' + name : ''}`);
+  }
+
+  function onClick(e) {
+    const btn = e.target.closest('[data-fix],[data-del],[data-deldup],[data-unify]');
+    if (btn) {
+      e.stopPropagation();
+      const d = btn.dataset;
+      if (d.fix) applyFixes([rows[+d.fix]]);
+      else if (d.del) deleteRow(rows[+d.del]);
+      else if (d.unify) unify(d.unify);
+      else deleteDuplicates(d.deldup);
+      return;
+    }
+    const el = e.target.closest('[data-i]');
+    if (el) jumpTo(+el.dataset.i);
+  }
+  function onHover(e) {
+    const el = e.target.closest('[data-i]');
+    highlightGroup(el ? rows[+el.dataset.i] : rows[activeIdx]);
+  }
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 1600);
+  }
+  function loadFile(f) { if (f) f.text().then((t) => setText(t, `Đã nạp ${f.name}`)); }
+
+  // ---- wiring ----
+  let deb;
+  input.addEventListener('input', () => { clearTimeout(deb); deb = setTimeout(render, 120); });
+  input.addEventListener('scroll', () => { backdrop.scrollTop = input.scrollTop; });
+  ['click', 'keyup', 'select'].forEach((ev) => input.addEventListener(ev, syncFromCaret));
+  new ResizeObserver(() => { backdrop.scrollTop = input.scrollTop; }).observe(input);
+  for (const el of [tbody, $('errors')]) {
+    el.addEventListener('click', onClick);
+    el.addEventListener('mouseover', onHover);
+    el.addEventListener('mouseleave', () => highlightGroup(rows[activeIdx]));
+  }
+  $('chips').addEventListener('click', (e) => {
+    const c = e.target.closest('[data-filter]');
+    if (c) { $('filter').value = c.dataset.filter; renderTable(); }
+  });
+  $('filter').addEventListener('change', renderTable);
+  $('sep').addEventListener('change', render);
+  $('btnFixAll').onclick = () => applyFixes(rows.filter((r) => r.diag && r.diag.candidates.length));
+  $('btnDelDupAll').onclick = () => deleteDuplicates();
+  $('btnUndo').onclick = undo;
+  $('btnSample').onclick = () => setText($('sample').textContent, 'Đã nạp dữ liệu mẫu');
+  $('btnSample2').onclick = () => setText($('sample2').textContent, 'Đã nạp mẫu có lỗi');
+  $('btnClear').onclick = () => { setText(''); input.focus(); };
+  $('btnOpen').onclick = () => $('file').click();
+  $('file').onchange = (e) => { loadFile(e.target.files[0]); e.target.value = ''; };
+  input.addEventListener('dragover', (e) => e.preventDefault());
+  input.addEventListener('drop', (e) => { if (e.dataTransfer.files.length) { e.preventDefault(); loadFile(e.dataTransfer.files[0]); } });
+  $('btnCopy').onclick = async () => {
+    const v = $('out').value;
+    try { await navigator.clipboard.writeText(v); } catch { $('out').select(); document.execCommand('copy'); }
+    toast(`Đã copy ${SN.splitNamesArray(input.value).length} tên`);
+  };
+
+  input.value = document.body.classList.contains('beta') ? '' : $('sample').textContent;
+  render();
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'd') { e.preventDefault(); document.body.classList.toggle('beta'); }
+  });
+})();
+</script>
+</body>
+</html>
