@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lịch đăng ký - Pending Appointments</title>
+<title>Lịch đăng ký — kctv.vn</title>
 <style>
   :root { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   body { margin: 0; background: #0f172a; color: #e2e8f0; }
-  header { padding: 16px 20px; background: #1e293b; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+  header { padding: 16px 20px 0; background: #1e293b; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
   h1 { margin: 0 0 12px; font-size: 18px; }
   .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
   input { padding: 8px 10px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 14px; }
@@ -18,6 +18,12 @@
   button:disabled { opacity: .5; cursor: default; }
   .status { font-size: 13px; color: #94a3b8; }
   .err { color: #f87171; }
+  .tabs { display: flex; gap: 4px; margin-top: 14px; }
+  .tab { background: transparent; color: #94a3b8; border-radius: 6px 6px 0 0; padding: 10px 16px; border-bottom: 2px solid transparent; }
+  .tab:hover { background: #273449; color: #e2e8f0; }
+  .tab.active { color: #fff; border-bottom-color: #3b82f6; background: #0f172a; }
+  .tab .count { display: inline-block; min-width: 20px; margin-left: 6px; padding: 1px 6px; border-radius: 10px; background: #334155; font-size: 12px; }
+  .tab.active .count { background: #3b82f6; }
   .wrap { padding: 16px 20px; overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; font-size: 13px; }
   th, td { border: 1px solid #334155; padding: 6px 8px; text-align: left; white-space: nowrap; }
@@ -25,11 +31,23 @@
   td { background: #0f172a; }
   tr:nth-child(even) td { background: #172033; }
   .empty { padding: 20px; text-align: center; color: #94a3b8; }
+
+  /* ---- loading ---- */
+  .loading-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; overflow: hidden; display: none; }
+  .loading-bar::before { content: ''; position: absolute; top: 0; bottom: 0; width: 35%; background: #3b82f6; animation: slide 1.1s ease-in-out infinite; }
+  @keyframes slide { from { left: -35%; } to { left: 100%; } }
+  body.loading .loading-bar { display: block; }
+  body.loading .wrap.has-rows { opacity: .45; pointer-events: none; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-pill { position: fixed; right: 20px; bottom: 20px; z-index: 20; display: none; gap: 8px; align-items: center; padding: 10px 14px; border-radius: 8px; background: #1e40af; color: #fff; font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+  body.loading .loading-pill { display: flex; }
+  .tab .spinner { width: 10px; height: 10px; margin-left: 6px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Lịch đăng ký đang chờ — kctv.vn</h1>
+  <h1>Lịch đăng ký — kctv.vn</h1>
   <div class="controls">
     <input id="ten" placeholder="Lọc họ tên" />
     <input id="sdt" placeholder="Lọc số điện thoại" inputmode="numeric" />
@@ -38,74 +56,105 @@
     <button id="clearBtn" class="secondary">Xoá cache</button>
     <span class="status" id="status"></span>
   </div>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="loading-bar"></div>
 </header>
-<div class="wrap">
+<div class="loading-pill"><span class="spinner"></span><span>Đang lấy dữ liệu mới…</span></div>
+<div class="wrap" id="wrap">
   <table id="tbl">
-    <thead>
-      <tr>
-        <th>#</th><th>Họ tên</th><th>Công ty</th><th>SĐT</th><th>Biển số</th>
-        <th>KL</th><th>Lệnh xuất</th><th>GGT</th><th>Loại hàng</th>
-        <th>Khung giờ</th><th>Dự kiến</th><th>Dự kiến xong</th>
-        <th>Status</th>
-      </tr>
-    </thead>
+    <thead><tr></tr></thead>
     <tbody></tbody>
   </table>
 </div>
 
 <script>
-const API = 'https://kctv.vn/filterPendingAppointments';
-// Server sẽ treo nếu không có body, nên luôn gửi 2 param rỗng.
-const FIXED_BODY = 'sdt_result=&bien_so_result=';
-const CACHE_KEY = 'kctv_pending_appointments';
+// Mỗi tab: endpoint + body cố định. Server treo nếu thiếu body, nên luôn gửi đủ param.
+const fmtDate = (v) => {
+  if (!v) return '';
+  const d = new Date(v);
+  return isNaN(d) ? v : d.toLocaleString('vi-VN', { hour12: false });
+};
+
+// Cột chung cho mọi tab
+const BASE_COLS = [
+  ['Họ tên', (r) => r.ho_ten],
+  ['Công ty', (r) => r.cong_ty],
+  ['SĐT', (r) => r.sdt],
+  ['Biển số', (r) => r.bien_so],
+  ['KL', (r) => r.kl],
+  ['Lệnh xuất', (r) => r.lenh_xuat_hang],
+  ['GGT', (r) => r.giay_gioi_thieu],
+  ['Loại hàng', (r) => r.loai_hang],
+  ['Khung giờ', (r) => r.time_range],
+  ['Dự kiến', (r) => r.tg_du_kien],
+  ['Dự kiến xong', (r) => r.tg_du_kien_xong],
+  ['Status', (r) => r.status],
+];
+// Cột thêm cho các tab đã duyệt
+const ACCEPTED_COLS = [
+  ['Duyệt lúc', (r) => fmtDate(r.date_accepted)],
+  ['Người duyệt', (r) => r.user_accepted],
+];
+
+// Mỗi tab: endpoint + body cố định + cột thêm.
+const TABS = [
+  { id: 'pending',  label: 'Chờ duyệt',     url: 'https://kctv.vn/filterPendingAppointments', body: 'sdt_result=&bien_so_result=',        cacheKey: 'kctv_pending_appointments',  extraCols: [] },
+  { id: 'appoint',  label: 'Lịch hẹn',      url: 'https://kctv.vn/filterDateResult',          body: 'type=1&sdt_result=&bien_so_result=', cacheKey: 'kctv_appointments',          extraCols: ACCEPTED_COLS },
+  { id: 'accepted', label: 'Chờ nhận hàng', url: 'https://kctv.vn/filterDateResult',          body: 'type=2',                             cacheKey: 'kctv_accepted_appointments', extraCols: ACCEPTED_COLS },
+];
+const ACTIVE_TAB_KEY = 'kctv_active_tab';
+const colsOf = (tab) => [...BASE_COLS, ...tab.extraCols];
 
 const $ = (id) => document.getElementById(id);
-let allRows = [];
-let fetchedAt = null;
+// state theo tab: { rows, fetchedAt, loading, error }
+const state = Object.fromEntries(TABS.map((t) => [t.id, { rows: [], fetchedAt: null, loading: false, error: null }]));
+let activeId = localStorage.getItem(ACTIVE_TAB_KEY);
+if (!TABS.some((t) => t.id === activeId)) activeId = TABS[0].id;
+const tabOf = (id) => TABS.find((t) => t.id === id);
 
 // ---- localStorage ----
-function saveCache(rows) {
-  fetchedAt = Date.now();
+function saveCache(tab) {
+  const s = state[tab.id];
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ fetchedAt, data: rows }));
+    localStorage.setItem(tab.cacheKey, JSON.stringify({ fetchedAt: s.fetchedAt, data: s.rows }));
   } catch (e) {
     console.warn('Không lưu được localStorage:', e);
   }
 }
 
-function loadCache() {
+function loadCache(tab) {
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return false;
+    const raw = localStorage.getItem(tab.cacheKey);
+    if (!raw) return;
     const obj = JSON.parse(raw);
-    allRows = Array.isArray(obj.data) ? obj.data : [];
-    fetchedAt = obj.fetchedAt || null;
-    return true;
-  } catch {
-    return false;
-  }
+    state[tab.id].rows = Array.isArray(obj.data) ? obj.data : [];
+    state[tab.id].fetchedAt = obj.fetchedAt || null;
+  } catch { /* cache hỏng → bỏ qua */ }
 }
 
 // ---- fetch ----
-async function fetchData() {
-  const btn = $('loadBtn');
-  btn.disabled = true;
-  setStatus('Đang tải...');
+async function fetchTab(tab) {
+  const s = state[tab.id];
+  if (s.loading) return;
+  s.loading = true;
+  s.error = null;
+  refresh();
   try {
-    const res = await fetch(API, {
+    const res = await fetch(tab.url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
-      body: FIXED_BODY,
+      body: tab.body,
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
-    allRows = Array.isArray(json.data) ? json.data : [];
-    saveCache(allRows);
-    applyFilter();
+    s.rows = Array.isArray(json.data) ? json.data : [];
+    s.fetchedAt = Date.now();
+    saveCache(tab);
   } catch (e) {
-    setStatus('Lỗi: ' + e.message + (allRows.length ? ' (đang hiển thị cache)' : ''), true);
+    s.error = e.message;
   } finally {
-    btn.disabled = false;
+    s.loading = false;
+    refresh();
   }
 }
 
@@ -118,12 +167,11 @@ const normName = (s) => String(s ?? '')
   .replace(/đ/g, 'd').replace(/Đ/g, 'D')
   .toLowerCase().replace(/\s+/g, ' ').trim();
 
-function applyFilter() {
+function filterRows(rows) {
   const qTen = normName($('ten').value);
   const qSdt = normPhone($('sdt').value);
   const qBs = normPlate($('bienso').value);
-
-  const rows = allRows.filter((r) => {
+  return rows.filter((r) => {
     if (qTen && !normName(r.ho_ten).includes(qTen)) return false;
     if (qSdt && !normPhone(r.sdt).includes(qSdt)) return false;
     if (qBs) {
@@ -132,28 +180,60 @@ function applyFilter() {
     }
     return true;
   });
-
-  render(rows);
-  const when = fetchedAt ? new Date(fetchedAt).toLocaleString('vi-VN') : '—';
-  setStatus(`Hiển thị ${rows.length}/${allRows.length} bản ghi · cập nhật: ${when}`);
 }
 
 // ---- render ----
-function render(rows) {
+function renderTabs() {
+  const nav = $('tabs');
+  nav.innerHTML = '';
+  TABS.forEach((t) => {
+    const s = state[t.id];
+    const btn = document.createElement('button');
+    btn.className = 'tab' + (t.id === activeId ? ' active' : '');
+    btn.textContent = t.label;
+    const badge = document.createElement('span');
+    badge.className = 'count';
+    badge.textContent = s.loading && !s.fetchedAt ? '…' : filterRows(s.rows).length;
+    btn.appendChild(badge);
+    if (s.loading) {
+      const sp = document.createElement('span');
+      sp.className = 'spinner';
+      sp.title = 'Đang tải dữ liệu mới';
+      btn.appendChild(sp);
+    }
+    btn.addEventListener('click', () => {
+      activeId = t.id;
+      localStorage.setItem(ACTIVE_TAB_KEY, activeId);
+      refresh();
+    });
+    nav.appendChild(btn);
+  });
+}
+
+function renderTable(tab, rows, loading) {
+  const cols = colsOf(tab);
+  const headTr = $('tbl').querySelector('thead tr');
+  headTr.innerHTML = '';
+  ['#', ...cols.map(([label]) => label)].forEach((label) => {
+    const th = document.createElement('th');
+    th.textContent = label;
+    headTr.appendChild(th);
+  });
+
   const tb = $('tbl').querySelector('tbody');
   tb.innerHTML = '';
+  $('wrap').classList.toggle('has-rows', rows.length > 0);
   if (!rows.length) {
-    tb.innerHTML = '<tr><td colspan="13" class="empty">Không có dữ liệu</td></tr>';
+    const msg = loading
+      ? '<span class="spinner"></span>&nbsp; Đang tải dữ liệu…'
+      : 'Không có dữ liệu';
+    tb.innerHTML = `<tr><td colspan="${cols.length + 1}" class="empty">${msg}</td></tr>`;
     return;
   }
   const frag = document.createDocumentFragment();
   rows.forEach((r, i) => {
     const tr = document.createElement('tr');
-    [
-      i + 1, r.ho_ten, r.cong_ty, r.sdt, r.bien_so, r.kl,
-      r.lenh_xuat_hang, r.giay_gioi_thieu, r.loai_hang, r.time_range,
-      r.tg_du_kien, r.tg_du_kien_xong, r.status,
-    ].forEach((c) => {
+    [i + 1, ...cols.map(([, get]) => get(r))].forEach((c) => {
       const td = document.createElement('td');
       td.textContent = c === undefined || c === null || c === '' ? '-' : c;
       tr.appendChild(td);
@@ -163,27 +243,44 @@ function render(rows) {
   tb.appendChild(frag);
 }
 
-function setStatus(msg, isErr = false) {
-  const s = $('status');
-  s.textContent = msg;
-  s.classList.toggle('err', isErr);
+function refresh() {
+  const s = state[activeId];
+  const rows = filterRows(s.rows);
+  renderTabs();
+  renderTable(tabOf(activeId), rows, s.loading);
+  document.body.classList.toggle('loading', s.loading);
+  $('loadBtn').disabled = s.loading;
+  $('loadBtn').textContent = s.loading ? 'Đang tải…' : 'Tải dữ liệu mới';
+
+  const st = $('status');
+  st.classList.toggle('err', !!s.error);
+  if (s.loading) {
+    st.textContent = s.fetchedAt
+      ? `Đang lấy dữ liệu mới… · đang hiển thị cache lúc ${new Date(s.fetchedAt).toLocaleString('vi-VN')}`
+      : 'Đang tải…';
+  } else if (s.error) {
+    st.textContent = 'Lỗi: ' + s.error + (s.rows.length ? ' (đang hiển thị cache)' : '');
+  } else {
+    const when = s.fetchedAt ? new Date(s.fetchedAt).toLocaleString('vi-VN') : '—';
+    st.textContent = `Hiển thị ${rows.length}/${s.rows.length} bản ghi · cập nhật: ${when}`;
+  }
 }
 
 // ---- events ----
-$('loadBtn').addEventListener('click', fetchData);
+$('loadBtn').addEventListener('click', () => fetchTab(tabOf(activeId)));
 $('clearBtn').addEventListener('click', () => {
-  localStorage.removeItem(CACHE_KEY);
-  allRows = [];
-  fetchedAt = null;
-  applyFilter();
+  TABS.forEach((t) => {
+    localStorage.removeItem(t.cacheKey);
+    Object.assign(state[t.id], { rows: [], fetchedAt: null, error: null });
+  });
+  refresh();
 });
-$('ten').addEventListener('input', applyFilter);
-$('sdt').addEventListener('input', applyFilter);
-$('bienso').addEventListener('input', applyFilter);
+['ten', 'sdt', 'bienso'].forEach((id) => $(id).addEventListener('input', refresh));
 
-// Khởi động: hiển thị cache ngay (nếu có), rồi tải mới.
-if (loadCache()) applyFilter();
-fetchData();
+// Khởi động: hiển thị cache ngay, rồi tải mới cả 3 tab song song.
+TABS.forEach(loadCache);
+refresh();
+TABS.forEach(fetchTab);
 </script>
 </body>
 </html>
