@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lịch đăng ký - Pending Appointments</title>
+<style>
+  :root { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { margin: 0; background: #0f172a; color: #e2e8f0; }
+  header { padding: 16px 20px; background: #1e293b; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+  h1 { margin: 0 0 12px; font-size: 18px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  input { padding: 8px 10px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 14px; }
+  button { padding: 8px 16px; border: 0; border-radius: 6px; background: #3b82f6; color: #fff; font-size: 14px; cursor: pointer; }
+  button:hover { background: #2563eb; }
+  button.secondary { background: #475569; }
+  button.secondary:hover { background: #334155; }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { font-size: 13px; color: #94a3b8; }
+  .err { color: #f87171; }
+  .wrap { padding: 16px 20px; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { border: 1px solid #334155; padding: 6px 8px; text-align: left; white-space: nowrap; }
+  th { background: #1e293b; }
+  td { background: #0f172a; }
+  tr:nth-child(even) td { background: #172033; }
+  .empty { padding: 20px; text-align: center; color: #94a3b8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Lịch đăng ký đang chờ — kctv.vn</h1>
+  <div class="controls">
+    <input id="ten" placeholder="Lọc họ tên" />
+    <input id="sdt" placeholder="Lọc số điện thoại" inputmode="numeric" />
+    <input id="bienso" placeholder="Lọc biển số" />
+    <button id="loadBtn">Tải dữ liệu mới</button>
+    <button id="clearBtn" class="secondary">Xoá cache</button>
+    <span class="status" id="status"></span>
+  </div>
+</header>
+<div class="wrap">
+  <table id="tbl">
+    <thead>
+      <tr>
+        <th>#</th><th>Họ tên</th><th>Công ty</th><th>SĐT</th><th>Biển số</th>
+        <th>KL</th><th>Lệnh xuất</th><th>GGT</th><th>Loại hàng</th>
+        <th>Khung giờ</th><th>Dự kiến</th><th>Dự kiến xong</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+const API = 'https://kctv.vn/filterPendingAppointments';
+// Server sẽ treo nếu không có body, nên luôn gửi 2 param rỗng.
+const FIXED_BODY = 'sdt_result=&bien_so_result=';
+const CACHE_KEY = 'kctv_pending_appointments';
+
+const $ = (id) => document.getElementById(id);
+let allRows = [];
+let fetchedAt = null;
+
+// ---- localStorage ----
+function saveCache(rows) {
+  fetchedAt = Date.now();
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ fetchedAt, data: rows }));
+  } catch (e) {
+    console.warn('Không lưu được localStorage:', e);
+  }
+}
+
+function loadCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return false;
+    const obj = JSON.parse(raw);
+    allRows = Array.isArray(obj.data) ? obj.data : [];
+    fetchedAt = obj.fetchedAt || null;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ---- fetch ----
+async function fetchData() {
+  const btn = $('loadBtn');
+  btn.disabled = true;
+  setStatus('Đang tải...');
+  try {
+    const res = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+      body: FIXED_BODY,
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    allRows = Array.isArray(json.data) ? json.data : [];
+    saveCache(allRows);
+    applyFilter();
+  } catch (e) {
+    setStatus('Lỗi: ' + e.message + (allRows.length ? ' (đang hiển thị cache)' : ''), true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ---- filter (frontend) ----
+const normPhone = (s) => String(s ?? '').replace(/\D/g, '');
+const normPlate = (s) => String(s ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+// Bỏ dấu tiếng Việt, không phân biệt hoa thường, gộp khoảng trắng
+const normName = (s) => String(s ?? '')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/đ/g, 'd').replace(/Đ/g, 'D')
+  .toLowerCase().replace(/\s+/g, ' ').trim();
+
+function applyFilter() {
+  const qTen = normName($('ten').value);
+  const qSdt = normPhone($('sdt').value);
+  const qBs = normPlate($('bienso').value);
+
+  const rows = allRows.filter((r) => {
+    if (qTen && !normName(r.ho_ten).includes(qTen)) return false;
+    if (qSdt && !normPhone(r.sdt).includes(qSdt)) return false;
+    if (qBs) {
+      const plates = normPlate(r.bien_so) + '|' + normPlate(r.bien_so_dau_keo);
+      if (!plates.includes(qBs)) return false;
+    }
+    return true;
+  });
+
+  render(rows);
+  const when = fetchedAt ? new Date(fetchedAt).toLocaleString('vi-VN') : '—';
+  setStatus(`Hiển thị ${rows.length}/${allRows.length} bản ghi · cập nhật: ${when}`);
+}
+
+// ---- render ----
+function render(rows) {
+  const tb = $('tbl').querySelector('tbody');
+  tb.innerHTML = '';
+  if (!rows.length) {
+    tb.innerHTML = '<tr><td colspan="13" class="empty">Không có dữ liệu</td></tr>';
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  rows.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    [
+      i + 1, r.ho_ten, r.cong_ty, r.sdt, r.bien_so, r.kl,
+      r.lenh_xuat_hang, r.giay_gioi_thieu, r.loai_hang, r.time_range,
+      r.tg_du_kien, r.tg_du_kien_xong, r.status,
+    ].forEach((c) => {
+      const td = document.createElement('td');
+      td.textContent = c === undefined || c === null || c === '' ? '-' : c;
+      tr.appendChild(td);
+    });
+    frag.appendChild(tr);
+  });
+  tb.appendChild(frag);
+}
+
+function setStatus(msg, isErr = false) {
+  const s = $('status');
+  s.textContent = msg;
+  s.classList.toggle('err', isErr);
+}
+
+// ---- events ----
+$('loadBtn').addEventListener('click', fetchData);
+$('clearBtn').addEventListener('click', () => {
+  localStorage.removeItem(CACHE_KEY);
+  allRows = [];
+  fetchedAt = null;
+  applyFilter();
+});
+$('ten').addEventListener('input', applyFilter);
+$('sdt').addEventListener('input', applyFilter);
+$('bienso').addEventListener('input', applyFilter);
+
+// Khởi động: hiển thị cache ngay (nếu có), rồi tải mới.
+if (loadCache()) applyFilter();
+fetchData();
+</script>
+</body>
+</html>
