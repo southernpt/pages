@@ -28,6 +28,11 @@
   table { border-collapse: collapse; width: 100%; font-size: 13px; }
   th, td { border: 1px solid #334155; padding: 6px 8px; text-align: left; white-space: nowrap; }
   th { background: #1e293b; }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { background: #273449; }
+  th.sorted { color: #93c5fd; }
+  .sort-ind { margin-left: 4px; font-size: 10px; opacity: .35; }
+  th.sorted .sort-ind { opacity: 1; }
   td { background: #0f172a; }
   tr:nth-child(even) td { background: #172033; }
   .empty { padding: 20px; text-align: center; color: #94a3b8; }
@@ -50,8 +55,10 @@
   <h1>Lịch đăng ký — kctv.vn</h1>
   <div class="controls">
     <input id="ten" placeholder="Lọc họ tên" />
+    <input id="congty" placeholder="Lọc công ty" />
     <input id="sdt" placeholder="Lọc số điện thoại" inputmode="numeric" />
     <input id="bienso" placeholder="Lọc biển số" />
+    <input id="ggt" placeholder="Lọc GGT" />
     <button id="loadBtn">Tải dữ liệu mới</button>
     <button id="clearBtn" class="secondary">Xoá cache</button>
     <span class="status" id="status"></span>
@@ -75,24 +82,33 @@ const fmtDate = (v) => {
   return isNaN(d) ? v : d.toLocaleString('vi-VN', { hour12: false });
 };
 
+// "20:31  13-10-2026" → 202610132031 để sort đúng thứ tự thời gian
+const vnDateTimeKey = (v) => {
+  const m = /(\d{1,2}):(\d{2})\s+(\d{1,2})-(\d{1,2})-(\d{4})/.exec(String(v ?? ''));
+  if (!m) return v;
+  const [, hh, mm, dd, mo, yyyy] = m;
+  return Number(yyyy + mo.padStart(2, '0') + dd.padStart(2, '0') + hh.padStart(2, '0') + mm);
+};
+
+// Mỗi cột: [tiêu đề, (r) => giá trị hiển thị, (r) => khoá sort (tuỳ chọn, mặc định = giá trị hiển thị)]
 // Cột chung cho mọi tab
 const BASE_COLS = [
   ['Họ tên', (r) => r.ho_ten],
   ['Công ty', (r) => r.cong_ty],
   ['SĐT', (r) => r.sdt],
   ['Biển số', (r) => r.bien_so],
-  ['KL', (r) => r.kl],
+  ['KL', (r) => r.kl, (r) => Number(r.kl)],
   ['Lệnh xuất', (r) => r.lenh_xuat_hang],
   ['GGT', (r) => r.giay_gioi_thieu],
   ['Loại hàng', (r) => r.loai_hang],
   ['Khung giờ', (r) => r.time_range],
-  ['Dự kiến', (r) => r.tg_du_kien],
-  ['Dự kiến xong', (r) => r.tg_du_kien_xong],
+  ['Dự kiến', (r) => r.tg_du_kien, (r) => vnDateTimeKey(r.tg_du_kien)],
+  ['Dự kiến xong', (r) => r.tg_du_kien_xong, (r) => vnDateTimeKey(r.tg_du_kien_xong)],
   ['Status', (r) => r.status],
 ];
 // Cột thêm cho các tab đã duyệt
 const ACCEPTED_COLS = [
-  ['Duyệt lúc', (r) => fmtDate(r.date_accepted)],
+  ['Duyệt lúc', (r) => fmtDate(r.date_accepted), (r) => r.date_accepted],
   ['Người duyệt', (r) => r.user_accepted],
 ];
 
@@ -103,7 +119,42 @@ const TABS = [
   { id: 'accepted', label: 'Chờ nhận hàng', url: 'https://kctv.vn/filterDateResult',          body: 'type=2',                             cacheKey: 'kctv_accepted_appointments', extraCols: ACCEPTED_COLS },
 ];
 const ACTIVE_TAB_KEY = 'kctv_active_tab';
+const SORT_KEY = 'kctv_sort';
 const colsOf = (tab) => [...BASE_COLS, ...tab.extraCols];
+
+// ---- sort ----
+// sort.col = tiêu đề cột ('#' = thứ tự gốc của API), sort.dir = 1 (tăng) | -1 (giảm) | 0 (không sort)
+let sort = { col: null, dir: 0 };
+try { sort = { ...sort, ...JSON.parse(localStorage.getItem(SORT_KEY) || '{}') }; } catch { /* bỏ qua */ }
+
+const collator = new Intl.Collator('vi', { numeric: true, sensitivity: 'base' });
+const isBlank = (v) => v === undefined || v === null || v === '' || (typeof v === 'number' && isNaN(v));
+
+// Bấm 1 lần: tăng dần, lần 2: giảm dần, lần 3: bỏ sort
+function toggleSort(col) {
+  if (sort.col !== col) sort = { col, dir: 1 };
+  else if (sort.dir === 1) sort = { col, dir: -1 };
+  else sort = { col: null, dir: 0 };
+  localStorage.setItem(SORT_KEY, JSON.stringify(sort));
+  refresh();
+}
+
+function sortRows(tab, rows) {
+  if (!sort.col || !sort.dir) return rows;
+  if (sort.col === '#') return sort.dir === 1 ? rows : [...rows].reverse();
+  const col = colsOf(tab).find(([label]) => label === sort.col);
+  if (!col) return rows; // cột không có ở tab này
+  const key = col[2] || col[1];
+  return rows
+    .map((r) => [key(r), r])
+    .sort(([a], [b]) => {
+      // Ô trống luôn nằm cuối, bất kể chiều sort
+      if (isBlank(a) || isBlank(b)) return isBlank(a) - isBlank(b);
+      const c = typeof a === 'number' && typeof b === 'number' ? a - b : collator.compare(String(a), String(b));
+      return c * sort.dir;
+    })
+    .map(([, r]) => r);
+}
 
 const $ = (id) => document.getElementById(id);
 // state theo tab: { rows, fetchedAt, loading, error }
@@ -169,10 +220,14 @@ const normName = (s) => String(s ?? '')
 
 function filterRows(rows) {
   const qTen = normName($('ten').value);
+  const qCty = normName($('congty').value);
+  const qGgt = normName($('ggt').value);
   const qSdt = normPhone($('sdt').value);
   const qBs = normPlate($('bienso').value);
   return rows.filter((r) => {
     if (qTen && !normName(r.ho_ten).includes(qTen)) return false;
+    if (qCty && !normName(r.cong_ty).includes(qCty)) return false;
+    if (qGgt && !normName(r.giay_gioi_thieu).includes(qGgt)) return false;
     if (qSdt && !normPhone(r.sdt).includes(qSdt)) return false;
     if (qBs) {
       const plates = normPlate(r.bien_so) + '|' + normPlate(r.bien_so_dau_keo);
@@ -216,7 +271,16 @@ function renderTable(tab, rows, loading) {
   headTr.innerHTML = '';
   ['#', ...cols.map(([label]) => label)].forEach((label) => {
     const th = document.createElement('th');
+    th.className = 'sortable';
+    th.title = label === '#' ? 'Sắp xếp theo thứ tự gốc' : 'Sắp xếp theo ' + label;
+    const active = sort.col === label && sort.dir;
+    if (active) th.classList.add('sorted');
     th.textContent = label;
+    const ind = document.createElement('span');
+    ind.className = 'sort-ind';
+    ind.textContent = active ? (sort.dir === 1 ? '▲' : '▼') : '↕';
+    th.appendChild(ind);
+    th.addEventListener('click', () => toggleSort(label));
     headTr.appendChild(th);
   });
 
@@ -245,7 +309,7 @@ function renderTable(tab, rows, loading) {
 
 function refresh() {
   const s = state[activeId];
-  const rows = filterRows(s.rows);
+  const rows = sortRows(tabOf(activeId), filterRows(s.rows));
   renderTabs();
   renderTable(tabOf(activeId), rows, s.loading);
   document.body.classList.toggle('loading', s.loading);
@@ -275,7 +339,7 @@ $('clearBtn').addEventListener('click', () => {
   });
   refresh();
 });
-['ten', 'sdt', 'bienso'].forEach((id) => $(id).addEventListener('input', refresh));
+['ten', 'congty', 'sdt', 'bienso', 'ggt'].forEach((id) => $(id).addEventListener('input', refresh));
 
 // Khởi động: hiển thị cache ngay, rồi tải mới cả 3 tab song song.
 TABS.forEach(loadCache);
