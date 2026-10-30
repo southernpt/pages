@@ -3,11 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tách biển số xe</title>
+<title>Tách biển số xe (đầu kéo + rơ moóc)</title>
 <style>
   :root {
     --bg: #f6f7f9; --card: #fff; --line: #dde1e6; --text: #1f2328; --muted: #6a737d;
     --ok: #1a7f37; --ok-bg: #dafbe1; --bad: #cf222e; --bad-bg: #ffd8d3; --dup: #9a6700; --dup-bg: #fff1b8;
+    --trl: #0550ae; --trl-bg: #ddf4ff;
     --accent: #0969da; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   }
   * { box-sizing: border-box; }
@@ -16,15 +17,16 @@
   header h1 { font-size: 16px; margin: 0; }
   header h1 small { color: var(--muted); font-weight: normal; }
   .chips { display: flex; gap: 8px; flex-wrap: wrap; }
-  .chip { padding: 2px 10px; border-radius: 999px; background: #eef1f4; font-size: 13px; cursor: default; }
+  .chip { padding: 2px 10px; border-radius: 999px; background: #eef1f4; font-size: 13px; cursor: pointer; }
   .chip b { font-variant-numeric: tabular-nums; }
   .chip.ok { background: var(--ok-bg); color: var(--ok); }
-  .chip.bad { background: var(--bad-bg); color: var(--bad); cursor: pointer; }
+  .chip.trl { background: var(--trl-bg); color: var(--trl); }
+  .chip.bad { background: var(--bad-bg); color: var(--bad); }
   .chip.dup { background: var(--dup-bg); color: var(--dup); }
   main { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; padding: 16px 20px; }
   @media (max-width: 960px) { main { grid-template-columns: 1fr; } }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
-  .card h2 { font-size: 14px; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+  .card h2 { font-size: 14px; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .card h2 .sp { flex: 1; }
   .full { grid-column: 1 / -1; }
   button, select { font: inherit; font-size: 13px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 6px; background: #f6f8fa; cursor: pointer; }
@@ -45,23 +47,28 @@
   .editor textarea { background: transparent; color: var(--text); resize: none; outline: none; caret-color: var(--text); }
   .editor textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #0969da22; }
   .backdrop mark { color: transparent; border-radius: 3px; }
-  .backdrop mark.ok { background: #dafbe18c; }
-  .backdrop mark.bad { background: var(--bad-bg); box-shadow: inset 0 -2px 0 var(--bad); }
+  .backdrop mark.tr { background: #dafbe1; }
+  .backdrop mark.rm { background: var(--trl-bg); box-shadow: inset 0 -2px 0 #54aeff; }
+  .backdrop mark.rm.alone { background: #ffe2c2; box-shadow: inset 0 -2px 0 #bc4c00; }
   .backdrop mark.dup { background: var(--dup-bg); box-shadow: inset 0 -2px 0 var(--dup); }
-  .backdrop mark.dupsrc { box-shadow: inset 0 -2px 0 var(--dup); }
-  .backdrop mark.same { background: #ffd33d; box-shadow: 0 0 0 2px #bf8700; }
-  .backdrop mark.active { background: #b6d7ff; box-shadow: 0 0 0 2px var(--accent); }
+  .backdrop mark.link { background: #eaeef2; }
+  .backdrop mark.bad { background: var(--bad-bg); box-shadow: inset 0 -2px 0 var(--bad); }
+  .backdrop mark.same { background: #ffd33d !important; box-shadow: 0 0 0 2px #bf8700; }
+  .backdrop mark.active { background: #b6d7ff !important; box-shadow: 0 0 0 2px var(--accent); }
   .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
   .legend span { display: inline-block; padding: 0 6px; border-radius: 3px; margin-right: 6px; }
 
-  #out { width: 100%; height: 150px; font: 13px/20px var(--mono); padding: 8px; border: 1px solid var(--line); border-radius: 6px; resize: vertical; background: #fbfcfd; }
-  .errors { list-style: none; margin: 0; padding: 0; max-height: 190px; overflow: auto; }
+  #out { width: 100%; height: 170px; font: 13px/20px var(--mono); padding: 8px; border: 1px solid var(--line); border-radius: 6px; resize: vertical; background: #fbfcfd; tab-size: 16; }
+  .errors { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; }
   .errors li { padding: 6px 8px; border-left: 3px solid var(--bad); background: #fff6f5; margin-bottom: 6px; border-radius: 0 6px 6px 0; cursor: pointer; }
   .errors li.dup { border-color: var(--dup); background: #fffbea; }
+  .errors li.info { border-color: #8c959f; background: #f6f8fa; }
   .errors li:hover { filter: brightness(.97); }
   .errors code { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; }
   .errors .why { color: var(--bad); font-size: 12px; }
   .errors li.dup .why { color: var(--dup); }
+  .errors li.info .why { color: var(--muted); }
+  .errors li.same { background: #fff1b8; }
   .empty { color: var(--muted); font-style: italic; }
 
   .tablewrap { max-height: 520px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
@@ -70,29 +77,27 @@
   th { position: sticky; top: 0; background: #f6f8fa; z-index: 1; font-weight: 600; }
   td { cursor: pointer; }
   td.mono { font-family: var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
-  td.note .tag { white-space: normal; display: inline-block; }
-  td.note .cand { overflow-wrap: anywhere; }
   td.num { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
   tr:hover td { background: #f3f6fa; }
-  tr.bad td { background: #fff6f5; }
-  tr.dup td { background: #fffbea; }
-  tr.dupsrc td:first-child { box-shadow: inset 3px 0 0 var(--dup); }
-  tr.dup td:first-child { box-shadow: inset 3px 0 0 var(--dup); }
+  tr.warn td { background: #fffbea; }
+  tr.grp td { background: #fff1b8; font-weight: 600; cursor: default; border-top: 2px solid #e8d48a; }
+  tr.grp td .pl { font-weight: 700; }
   tr.same td { background: #fff1b8 !important; }
   tr.active td { background: #ddebff !important; }
-  tr.group-start td { border-top: 2px solid #e8d48a; }
-  .pos { font-family: var(--mono); font-size: 12px; padding: 0 4px; border-radius: 3px; background: #fff; border: 1px solid #e8d48a; cursor: pointer; margin-right: 2px; }
+  .pos { font-family: var(--mono); font-size: 12px; padding: 0 4px; border-radius: 3px; background: #fff; border: 1px solid #d0d7de; cursor: pointer; margin: 0 2px 2px 0; display: inline-block; }
   .pos:hover { background: #ffd33d; }
-  .pos.first { font-weight: 700; }
-  button.del { color: var(--bad); }
-  .errors li.dup.same { background: #fff1b8; }
-  .chip.dup { cursor: pointer; }
-  .tag { font-size: 12px; padding: 0 6px; border-radius: 4px; white-space: nowrap; }
+  .tag { font-size: 12px; padding: 0 6px; border-radius: 4px; white-space: nowrap; display: inline-block; margin: 0 2px 2px 0; }
   .tag.ok { background: var(--ok-bg); color: var(--ok); }
+  .tag.trl { background: var(--trl-bg); color: var(--trl); }
   .tag.bad { background: var(--bad-bg); color: var(--bad); }
   .tag.dup { background: var(--dup-bg); color: var(--dup); }
+  .tag.info { background: #eaeef2; color: var(--muted); }
+  .pos.first { font-weight: 700; }
   .cand { font-family: var(--mono); font-size: 12px; color: var(--ok); }
   .fix { font-size: 12px; padding: 0 6px; margin-left: 4px; }
+  button.del { color: var(--bad); }
+  .pl { font-family: var(--mono); }
+  .pl.rm { color: var(--trl); }
   .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #1f2328; color: #fff; padding: 6px 14px; border-radius: 6px; opacity: 0; transition: opacity .2s; pointer-events: none; }
   .toast.show { opacity: .92; }
 
@@ -100,73 +105,87 @@
   .friendly { display: none; }
   body.beta .tech { display: none !important; }
   body.beta .friendly { display: revert; }
-  body.beta col.c-idx { visibility: collapse; width: 0; }
-  body.beta .c-idx { display: none; }
+  col.c-tech { width: 90px; }
+  body.beta col.c-tech { visibility: collapse; width: 0; }
   .steps { margin: 12px 20px 0; padding: 10px 14px; background: #ddf4ff; border: 1px solid #54aeff66; border-radius: 8px; font-size: 14px; }
   .steps ol { margin: 4px 0 0; padding-left: 22px; }
-  .beta-tag { font-size: 11px; font-weight: 600; color: #fff; background: #8250df; padding: 1px 6px; border-radius: 4px; vertical-align: middle; }
+  .beta-tag { font-size: 11px; font-weight: 600; color: #fff; background: #8250df; padding: 1px 6px; border-radius: 4px; vertical-align: middle; margin-left: 6px; }
 </style>
 </head>
 <body class="beta">
 <header>
-  <h1>Tách biển số <small class="tech">— parity JS của <code>split_plates()</code> / <code>split_plates_array()</code></small><span class="friendly beta-tag">BETA</span></h1>
+  <h1>Tách biển số xe — đầu kéo + rơ moóc <small class="tech">— split-plates-v2.js (không có bản SQL)</small><span class="beta-tag">BETA v2</span></h1>
   <div class="chips" id="chips"></div>
 </header>
 
 <div class="steps friendly">
   <b>Cách dùng</b>
   <ol>
-    <li>Dán danh sách biển số vào ô <b>Dữ liệu nhập</b> (có thể kéo-thả file .txt vào ô).</li>
-    <li>Xem các chỗ tô <span style="background:var(--bad-bg)">đỏ</span> (sai) và <span style="background:var(--dup-bg)">vàng</span> (trùng). Bấm <b>Sửa</b> / <b>Xoá</b> để sửa nhanh, hoặc sửa trực tiếp trong ô.</li>
-    <li>Bấm <b>Copy</b> để lấy danh sách biển số đã chuẩn hoá. Bấm vào một dòng trong bảng để nhảy tới chỗ đó trong ô nhập.</li>
+    <li>Dán danh sách biển số vào ô <b>Dữ liệu nhập</b> (có thể kéo-thả file .txt). Không cần sửa dấu: trang tự tìm biển số trong chữ.</li>
+    <li>Biển có seri <b>R</b> hoặc <b>RM</b> (vd. <code>51R-329.88</code>, <code>50RM-080.38</code>) là biển <b>rơ moóc / sơ mi rơ moóc</b>. <b>Đầu kéo luôn đứng trước, rơ moóc đứng sau</b>: mỗi rơ moóc được ghép với biển đầu kéo gần nhất <b>phía trước</b> nó, thành <code>50H-028.82-51R-329.88</code>. Một đầu kéo có nhiều rơ moóc phía sau (vd. <code>61H 04963; 61R06488; 50R52246; 50RM08328</code>) thành nhiều dòng, mỗi rơ moóc 1 dòng.</li>
+    <li>Xem mục <b>Lỗi / cảnh báo</b>: phần không nhận ra (bấm <b>Sửa</b> nếu có gợi ý), xe nhập trùng (bấm <b>Xoá bản trùng</b>), biển dùng ở nhiều xe (bấm để lọc ở <b>Danh sách xe</b>, rồi <b>Xoá xe này</b> ở cách ghép sai), rơ moóc chưa có đầu kéo. Nếu ghép sai, sửa thứ tự trong ô nhập: đặt biển đầu kéo ngay trước rơ moóc của nó. Mọi thao tác đều <b>Hoàn tác</b> được.</li>
+    <li>Bấm <b>Copy</b> để lấy kết quả. Chọn <b>Sắp xếp A → Z</b> nếu muốn xếp xe theo biển số. Chọn <b>2 cột</b> để dán vào Excel (cột đầu kéo, cột rơ moóc).</li>
   </ol>
 </div>
 <main>
   <section class="card">
-    <h2><span class="tech">Dữ liệu thô</span><span class="friendly">Dữ liệu nhập</span> <span class="sp"></span>
-      <button id="btnSample" title="Nạp dữ liệu mẫu để thử"><span class="tech">Mẫu test-plates.txt</span><span class="friendly">Thử dữ liệu mẫu</span></button>
+    <h2>Dữ liệu nhập <span class="sp"></span>
+      <button id="btnSample" title="Nạp dữ liệu mẫu để thử">Thử dữ liệu mẫu</button>
       <button id="btnOpen">Mở file…</button>
-      <button id="btnUndo" title="Hoàn tác lần sửa / xoá gần nhất" disabled>↶ Hoàn tác</button>
-      <button id="btnClear"><span class="tech">Xoá</span><span class="friendly">Xoá hết</span></button>
+      <button id="btnUndo" title="Hoàn tác lần sửa gần nhất" disabled>↶ Hoàn tác</button>
+      <button id="btnClear">Xoá hết</button>
       <input type="file" id="file" accept=".txt,.csv,text/*" hidden>
     </h2>
     <div class="editor">
       <div class="backdrop" id="backdrop" aria-hidden="true"></div>
-      <textarea id="input" spellcheck="false" placeholder="Dán danh sách biển số, cách nhau bởi dấu , ; &amp; /"></textarea>
+      <textarea id="input" spellcheck="false" placeholder="Dán biển số, đầu kéo trước rơ moóc sau, vd: 50H.02882-51R 32988, 50H-72722 - mooc 50RM08038, 61H 04963; 61R06488; 50R52246"></textarea>
     </div>
     <div class="hint legend">
-      <span style="background:#dafbe1">hợp lệ</span><span style="background:var(--bad-bg)">không hợp lệ</span><span style="background:var(--dup-bg)">trùng</span>
-      Dấu phân cách: <b>,</b> <b>;</b> <b>&amp;</b> <b>/</b><span class="tech"> (giống SQL)</span> — xuống dòng / khoảng trắng không tách. Có thể kéo-thả file .txt vào ô.
+      <span style="background:#dafbe1">đầu kéo / xe</span><span style="background:var(--trl-bg)">rơ moóc (R, RM)</span><span style="background:#ffe2c2">rơ moóc chưa có đầu kéo</span><span style="background:var(--dup-bg)">trùng (nhập lại)</span><span style="background:var(--bad-bg)">không nhận ra</span>
+      <br>Mỗi rơ moóc (R, RM) ghép với đầu kéo gần nhất đứng <b>trước</b> nó. Dấu ngăn cách, chữ “mooc”, xuống dòng không ảnh hưởng.
     </div>
   </section>
 
   <section class="card">
-    <h2 title="Đã chuẩn hoá, bỏ trùng, giữ thứ tự xuất hiện đầu">Biển hợp lệ <small class="tech" style="font-weight:normal;color:var(--muted)">(split_plates_array)</small><span class="sp"></span>
-      <select id="sep"><option value=", ">, </option><option value="\n">xuống dòng</option><option value="; ">; </option></select>
+    <h2>Kết quả <span class="sp"></span>
+      <select id="mode" title="Dạng kết quả">
+        <option value="combo">Tổ hợp: 50H-028.82-51R-329.88</option>
+        <option value="tsv">2 cột (dán Excel)</option>
+        <option value="plates">Biển rời (mỗi biển 1 lần)</option>
+      </select>
+      <select id="sort" title="Thứ tự xe trong kết quả"><option value="input">Thứ tự nhập</option><option value="az">Sắp xếp A → Z</option></select>
+      <select id="sep" title="Dấu ngăn cách"><option value="\n">xuống dòng</option><option value=", ">, </option><option value="; ">; </option></select>
       <button id="btnCopy" class="primary">Copy</button>
     </h2>
     <textarea id="out" readonly></textarea>
+    <div class="hint">
+      <button id="btnReplace" title="Thay nội dung ô nhập bằng kết quả tổ hợp (mỗi xe 1 dòng). Có thể hoàn tác.">Thay ô nhập bằng kết quả</button>
+    </div>
 
     <h2 style="margin-top:12px">Lỗi / cảnh báo <span class="sp"></span>
-      <button id="btnFixAll" title="Thay mỗi phần lỗi bằng các biển tìm được bên trong, nối bằng dấu ,">Áp dụng mọi gợi ý</button>
-      <button id="btnDelDupAll" class="del" title="Xoá mọi lần xuất hiện lặp lại trong dữ liệu thô, giữ lần đầu">Xoá mọi trùng</button>
+      <button id="btnFixAll" title="Thay mỗi phần lỗi bằng biển số gợi ý">Áp dụng mọi gợi ý</button>
+      <button id="btnDelDupAll" class="del" title="Xoá mọi xe nhập lặp lại trong ô nhập, giữ lần đầu">Xoá mọi trùng</button>
     </h2>
     <ul class="errors" id="errors"></ul>
   </section>
 
   <section class="card full">
-    <h2><span class="tech">Bảng đối chiếu</span><span class="friendly">Chi tiết từng mục</span> <small style="font-weight:normal;color:var(--muted)">— bấm vào ô để nhảy tới vị trí trong <span class="tech">dữ liệu thô</span><span class="friendly">ô nhập</span></small><span class="sp"></span>
+    <h2>Danh sách xe <small style="font-weight:normal;color:var(--muted)">— bấm vào dòng để nhảy tới vị trí trong ô nhập</small><span class="sp"></span>
       <select id="filter">
         <option value="all">Tất cả</option>
-        <option value="bad">Không hợp lệ</option>
-        <option value="ok">Hợp lệ</option>
-        <option value="dup">Trùng (gộp theo biển)</option>
+        <option value="pair">Có rơ moóc (tổ hợp)</option>
+        <option value="single">Không rơ moóc</option>
+        <option value="warn">Có cảnh báo</option>
+        <option value="dup">Trùng (nhập nhiều lần)</option>
+        <option value="conflict">Biển ở nhiều xe (ghép khác nhau)</option>
+        <option value="multi">Đầu kéo kéo nhiều rơ moóc</option>
+        <optgroup id="filterPlates" label="Biển ở nhiều xe — từng biển"></optgroup>
       </select>
     </h2>
     <div class="tablewrap">
       <table>
-        <colgroup><col class="c-idx" style="width:48px"><col style="width:76px"><col style="width:30%"><col style="width:20%"><col style="width:72px"><col></colgroup>
-        <thead><tr><th class="c-idx">#</th><th><span class="tech">first_pos</span><span class="friendly">Vị trí</span></th><th><span class="tech">raw</span><span class="friendly">Bạn nhập</span></th><th><span class="tech">plate</span><span class="friendly">Biển số chuẩn</span></th><th><span class="tech">is_valid</span><span class="friendly">Kết quả</span></th><th>Ghi chú</th></tr></thead>
+        <colgroup><col style="width:44px"><col style="width:24%"><col style="width:14%"><col style="width:14%"><col style="width:60px"><col style="width:22%"><col><col class="c-tech"></colgroup>
+        <thead><tr><th>#</th><th>Xe (chuẩn)</th><th>Đầu kéo</th><th>Rơ moóc</th><th>Số lần</th><th>Bạn nhập</th><th>Ghi chú</th><th class="tech">liên kết</th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
@@ -174,398 +193,519 @@
 </main>
 <div class="toast" id="toast"></div>
 
-<script type="text/plain" id="sample">61H-14258, 61H-039.58, 51C-94762 50H-90445, 61H-06801, 51D-42130, 61H-06814 67H-05261; 67R-000.25, 66F-001.16, 66R -001.34 67H-05264; 67RM-00423, 67H-05261; 67R-000.25, 50H-146.40, 51R-214.78, 50H-150.98, 51R-215.01, 50H-161.65, 51R-220.21, 50H-162.86, 51R-221.08, 50H-290.78, 51R-227.36, 50H-543.00, 50RM-042.57, 50H-612.13, 50RM-049.19, 61H-14258, 61H-039.58, 51C-94762 50H-90445, 61H-06801, 51D-42130, 61H-06814 67H-05261; 67R-000.25, 66F-001.16, 66R -001.34 67H-05264; 67RM-00423, 67H-05261; 67R-000.25, 50H-146.40, 51R-214.78, 50H-150.98, 51R-215.01, 50H-161.65, 51R-220.21, 50H-162.86, 51R-221.08, 50H-290.78, 51R-227.36, 50H-543.00, 50RM-042.57, 50H-612.13, 50RM-049.19, 95H-012.54, 95RM-000.47, 60H-045.11, 60R-055.67, 60H-184.21, 60R-037.98, 50H-727.22, 50RM- 08038, 70C-02908, 50RM-21829, 51C-21861, 51R-03991, 51C-67059, 70R-02875, 70C-04755, 70R-02469, 70C-05603, 70R-02451, 70H-06608, 70R-02467, 70H-06600, 70R-00645, 51C-73117, 51C-34631, 70RM-01432, 70C-03677, 70RM-01433, 70C.05669, 70RM-01434
+<script type="text/plain" id="sample">50H.02882-51R 32988 51D.63368-51R 33059,70H 18398-62RM 00215, 50RM08038 51C79933; 51R25011 50H53848; 50RM03929 61H 04963; 61R06488 50R52246;50RM08328 61E03293;61R06559 51C 65836;50RM02668, 65H060.56 95R002.07, 51C42719, 51C42777, 51D60884; 50H14052;50H45791;50E32792 ;50H-72722 - mooc 50RM08038, 51C97933 MOOC51R25011, 61E 03293-61R 06559, 51C65836-50RM 02668, 51C-94762, 61H-08098-61RM-01379, 61H17822 – 61R06056, 61H-12638-61R-06802, 81C-16730; 81H-04394
+Romooc 81RM-01131; 81H-04394Romooc 81R-00606; 81H-04394Romooc 81R00515;
 50H –761.42 & Mooc 51R – 185.83;
-50H -233.55 & Mooc 51R – 317.54
-50H – 365.32;
-51C – 936.63;
-50H-44120 & 61R-06388
-60H-12818 ; 60RM-00340
-95H-01254, 95RM-00047; 62H.03068. 62R.010.93; 51M-654.92, 66RM-009.22 50E-39169; 50RM-12944, 60C41959, 60H02896, 66C10530;66R00189, 72H03902;72R01585, 60H37961, 15C12556, 29H12901
-50H-08627 / 51R-26079
 62H-02746, Rơ móc 62RM 00085
-72C 172.76; 50H-14640 & 51R-21478
-50H-15098 & 51R-21501
-50H-16286 & 51R-22108
-50H-16165 & 51R-22021
-50H-29078 & 51R-22736
-50H-54300 & 50RM-04257
-50H-61213 & 50RM-04919
-95H-01254 & 95RM-00047
-60H-18421 & 60R-03798
-60H-04511 & 60R-05567
-50H-72722 & 50RM-08038
-61H-12638 & 61R-06802
-61H-17822 & 61R-06056
-61H-08098 & 61RM-01379
-50H-44120 & 61R-06388; 61H 09039
-61E 01316
-60C 54916
-61H 09486
-50E 57507
-61H 03958
-51C-92455 & 51R30214;  50LD-009.04
-50LD-00903
-50LD-03825
-50LD-10079
-50LD-10041
- 61C - 453.81,
-51M - 688.52 & 50RM - 172.85
+51M - 688.52 & 50RM - 172.85, 05C12345, 51O-123.45, 5lC-I2345
+50H-72722 & 50RM-08038; 50H.02882-51R 32988
+82C-11223 Romooc: 82RM-01131; 82R-00606; 82R00515
 </script>
 
 <script>
-/* ==== BEGIN split-plates.js (giữ y hệt file split-plates.js) ==== */
-// Parity port of split-plates.sql (split_plates / split_plates_array) to JavaScript.
-// Behaviour must match PostgreSQL exactly — verify with: node split-plates.test.js
-// Works in browser (window.SplitPlates) and Node (module.exports).
+/* ==== BEGIN split-plates-v2.js (giữ y hệt file split-plates-v2.js) ==== */
+// split-plates v2 (beta-v2): find plates anywhere in free text and join each
+// rơ moóc / sơ mi rơ moóc (seri R or RM) to its đầu kéo (any other seri).
+// UI only — NOT part of SQL parity (split-plates.sql is unchanged). Test: node split-plates-v2.test.js
+// Works in browser (window.SplitPlatesV2) and Node (module.exports).
+//
+// Domain:
+//   - Đầu kéo and sơ mi rơ moóc are 2 vehicles, each has its own plate.
+//   - Seri "R" (old, e.g. 51R-329.88) and "RM" (TT 24/2023, TT 79/2024, e.g. 50RM-080.38) = rơ moóc.
+//   - Output of a pair: "<đầu kéo>-<rơ moóc>", e.g. 50H-028.82-51R-329.88.
+//
+// Rule (user, 2026-10-30): the đầu kéo is ALWAYS written first, the rơ moóc after it.
+//   Each rơ moóc joins the nearest đầu kéo BEFORE it; separators and other text do not matter.
+//   One đầu kéo followed by n rơ moóc -> n vehicles:
+//     "61H 04963; 61R06488;50R52246;50RM08328 61E03293"
+//       -> 61H-049.63-61R-064.88, 61H-049.63-50R-522.46, 61H-049.63-50RM-083.28, 61E-032.93
+//   A rơ moóc with no đầu kéo before it stays alone (warning 'trailer_only').
+//   A đầu kéo with no rơ moóc after it is a vehicle on its own.
 (function (root, factory) {
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.SplitPlates = api;
+  else root.SplitPlatesV2 = api;
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  // Same regex as SQL is_valid (TT 79/2024/TT-BCA)
   const VALID_RE = /^[1-9][0-9](?:[ABCDEFGHKLMNPSTUVXYZR]|RM|LD|CD|HC|KT)[0-9]{4,5}$/;
-  const FMT5_RE = /^([0-9]{2}[A-Z]{1,2})([0-9]{3})([0-9]{2})$/;
-  const FMT4_RE = /^([0-9]{2}[A-Z]{1,2})([0-9]{4})$/;
-
-  // PG btrim(text) with 1 arg trims ONLY the space character ' ' (not \n, \t).
-  function btrim(s) {
-    return s.replace(/^ +| +$/g, '');
-  }
-
-  // PG upper(): per-character mapping (never expands 'ß' -> 'SS').
-  function pgUpper(s) {
+  // A plate anywhere in the text. Letters may touch the left side ("MOOC51R25011"), digits may not.
+  const SCAN_RE =
+    /(?<![0-9])([1-9][0-9])[ \t]*[-–—.]?[ \t]*(RM|LD|CD|HC|KT|[ABCDEFGHKLMNPSTUVXYZR])[ \t]*[-–—.]?[ \t]*([0-9]{3}[ \t]*\.?[ \t]*[0-9]{2}|[0-9]{4})(?![0-9])/gu;
+  // Upper-case per code point, keep string length (same idea as PG upper()).
+  function upper(s) {
     let out = '';
     for (const ch of s) {
       const u = ch.toUpperCase();
-      out += [...u].length === 1 ? u : ch;
+      out += u.length === ch.length ? u : ch;
     }
     return out;
   }
 
-  // regexp_replace(raw, '[^[:alnum:]]', '', 'g') under a UTF-8 locale:
-  // keeps Unicode letters + digits (e.g. "ơ", "ó" survive).
-  function compactOf(raw) {
-    return pgUpper(raw.replace(/[^\p{L}\p{Nd}\p{Nl}]/gu, ''));
+  function formatCompact(c) {
+    const m5 = c.match(/^([0-9]{2}[A-Z]{1,2})([0-9]{3})([0-9]{2})$/);
+    if (m5) return `${m5[1]}-${m5[2]}.${m5[3]}`;
+    const m4 = c.match(/^([0-9]{2}[A-Z]{1,2})([0-9]{4})$/);
+    return m4 ? `${m4[1]}-${m4[2]}` : c;
   }
 
-  function formatPlate(compact, isValid) {
-    if (isValid && /[0-9]{5}$/.test(compact)) return compact.replace(FMT5_RE, '$1-$2.$3');
-    if (isValid) return compact.replace(FMT4_RE, '$1-$2');
-    return compact;
-  }
-
-  // Like split_plates() but also returns char offsets (start/end in input) + compact,
-  // and the index of the separator before/after the part (-1 if none).
-  function splitPlatesDetailed(input) {
-    if (input == null) return [];
-    const rows = [];
-    const sepRe = /[,;&/]/g; // regexp_split_to_array(p_input, '[,;&/]')
-    let segStart = 0;
-    let ord = 0;
-    const pushSeg = (segEnd, sepAfter) => {
-      ord += 1;
-      const seg = input.slice(segStart, segEnd);
-      const raw = btrim(seg);
-      if (btrim(raw) === '') return; // WHERE btrim(raw) <> ''
-      const lead = seg.length - seg.replace(/^ +/, '').length;
-      const compact = compactOf(raw);
-      const isValid = VALID_RE.test(compact);
-      rows.push({
-        raw,
-        plate: formatPlate(compact, isValid),
-        is_valid: isValid,
-        first_pos: ord,
-        compact,
-        start: segStart + lead,
-        end: segStart + lead + raw.length,
-        sepBefore: segStart - 1,
-        sepAfter,
-      });
-    };
-    let m;
-    while ((m = sepRe.exec(input)) !== null) {
-      pushSeg(m.index, m.index);
-      segStart = m.index + 1;
-    }
-    pushSeg(input.length, -1);
-    return rows;
-  }
-
-  // split_plates(p_input) -> rows {raw, plate, is_valid, first_pos}
-  function splitPlates(input) {
-    return splitPlatesDetailed(input).map(({ raw, plate, is_valid, first_pos }) => ({
-      raw, plate, is_valid, first_pos,
-    }));
-  }
-
-  // split_plates_array(p_input) -> valid plates, deduped, ordered by first appearance
-  function splitPlatesArray(input) {
-    const seen = new Set();
+  // Every plate in the text: { plate, compact, province, seri, isTrailer, start, end, raw, idx }
+  function scanPlates(text) {
+    if (text == null) return [];
+    const up = upper(text);
     const out = [];
-    for (const r of splitPlates(input)) {
-      if (r.is_valid && !seen.has(r.plate)) {
-        seen.add(r.plate);
-        out.push(r.plate);
+    let m;
+    SCAN_RE.lastIndex = 0;
+    while ((m = SCAN_RE.exec(up)) !== null) {
+      const compact = m[1] + m[2] + m[3].replace(/[ \t.]/g, '');
+      if (!VALID_RE.test(compact)) continue;
+      out.push({
+        plate: formatCompact(compact),
+        compact,
+        province: m[1],
+        seri: m[2],
+        isTrailer: m[2] === 'R' || m[2] === 'RM',
+        start: m.index,
+        end: m.index + m[0].length,
+        raw: text.slice(m.index, m.index + m[0].length),
+        idx: out.length,
+      });
+    }
+    return out;
+  }
+
+  // Text parts that hold digits but are not part of any plate (wrong plates, typos).
+  function leftovers(text, plates) {
+    const out = [];
+    let pos = 0;
+    const gaps = [];
+    for (const p of plates) { gaps.push([pos, p.start]); pos = p.end; }
+    gaps.push([pos, text.length]);
+    for (const [gs, ge] of gaps) {
+      const re = /[^,;&/\n\r]+/g;
+      const gap = text.slice(gs, ge);
+      let m;
+      while ((m = re.exec(gap)) !== null) {
+        if (!/[0-9]/.test(m[0])) continue;
+        const lead = m[0].length - m[0].trimStart().length;
+        const raw = m[0].trim();
+        out.push({ raw, start: gs + m.index + lead, end: gs + m.index + lead + raw.length });
       }
     }
     return out;
   }
 
-  // ---- Diagnostics (NOT part of SQL parity; used by the demo UI) ----
+  // Main entry. Returns:
+  //   plates:   scanPlates() rows + tractor (idx of its đầu kéo, rơ moóc only, -1 = none)
+  //             + partner (rơ moóc: its đầu kéo; đầu kéo: its first rơ moóc; -1 = none)
+  //             + vehicle (first vehicle idx) + vehicles (all vehicle idx)
+  //   vehicles: unique vehicles in order of first appearance
+  //             { key, tractor, trailer, idx, occurrences: [{ plates, start, end, cut, level }] }
+  //             start/end = text from the đầu kéo to the rơ moóc;
+  //             cut = { start, end, keepKeyword } = text to remove when this occurrence is deleted
+  //             (đầu kéo with several rơ moóc: only the rơ moóc is removed, the đầu kéo stays)
+  //             level = 'ghép' (1 rơ moóc), 'danh sách' (several), '—' (alone)
+  //   unknown:  leftovers() rows + diagnose()
+  //   issues:   [{ type: 'trailer_only'|'conflict'|'repeat'|'multi', ... }]
+  function analyse(text) {
+    text = text == null ? '' : String(text);
+    const plates = scanPlates(text);
+    const trailersOf = new Map(); // đầu kéo idx -> [rơ moóc idx]
+    let cur = -1;
+    for (const p of plates) {
+      if (!p.isTrailer) { cur = p.idx; trailersOf.set(cur, []); p.tractor = -1; continue; }
+      p.tractor = cur;
+      if (cur >= 0) trailersOf.get(cur).push(p.idx);
+    }
 
-  // Plate-like fragments inside a raw string, tolerant of spaces / - – . between parts.
-  const CANDIDATE_RE =
-    /(?<![0-9\p{L}])([1-9][0-9])[ \t]*[-–—.]?[ \t]*(RM|LD|CD|HC|KT|[ABCDEFGHKLMNPSTUVXYZR])[ \t]*[-–—.]?[ \t]*([0-9]{3}[ \t]*\.?[ \t]*[0-9]{2}|[0-9]{4})(?![0-9])/gu;
+    const vehicles = [];
+    const byKey = new Map();
+    const addOcc = (occ, cut, level) => {
+      const tractor = plates[occ[0]].isTrailer ? null : plates[occ[0]].plate;
+      const trailer = occ.length > 1 ? plates[occ[1]].plate : plates[occ[0]].isTrailer ? plates[occ[0]].plate : null;
+      const key = [tractor, trailer].filter(Boolean).join('-');
+      let v = byKey.get(key);
+      if (!v) {
+        v = { key, tractor, trailer, occurrences: [], idx: vehicles.length };
+        byKey.set(key, v);
+        vehicles.push(v);
+      }
+      v.occurrences.push({ plates: occ, start: plates[occ[0]].start, end: plates[occ[occ.length - 1]].end, cut, level });
+      for (const k of occ) (plates[k].vehicles ||= []).includes(v.idx) || plates[k].vehicles.push(v.idx);
+    };
+    for (const p of plates) {
+      if (p.isTrailer) {
+        p.partner = p.tractor;
+        if (p.tractor < 0) addOcc([p.idx], { start: p.start, end: p.end, keepKeyword: false }, '—');
+        continue;
+      }
+      const ts = trailersOf.get(p.idx);
+      p.partner = ts.length ? ts[0] : -1;
+      if (!ts.length) addOcc([p.idx], { start: p.start, end: p.end, keepKeyword: false }, '—');
+      else if (ts.length === 1) addOcc([p.idx, ts[0]], { start: p.start, end: plates[ts[0]].end, keepKeyword: false }, 'ghép');
+      else for (const j of ts) addOcc([p.idx, j], { start: plates[j].start, end: plates[j].end, keepKeyword: true }, 'danh sách');
+    }
+    for (const p of plates) p.vehicle = p.vehicles[0];
 
-  function findCandidates(raw) {
+    const issues = [];
+    // Same plate used in different vehicles. Not a conflict: one đầu kéo with several rơ moóc ('multi').
+    const usage = new Map(); // plate -> Set(vehicle idx)
+    for (const v of vehicles)
+      for (const pl of [v.tractor, v.trailer]) if (pl) {
+        if (!usage.has(pl)) usage.set(pl, new Set());
+        usage.get(pl).add(v.idx);
+      }
+    for (const [plate, set] of usage) {
+      if (set.size < 2) continue;
+      const vs = [...set];
+      const multi = vs.every((k) => vehicles[k].tractor === plate && vehicles[k].trailer);
+      issues.push({ type: multi ? 'multi' : 'conflict', plate, vehicles: vs });
+    }
+    for (const v of vehicles) {
+      if (v.trailer && !v.tractor) issues.push({ type: 'trailer_only', vehicle: v.idx });
+      if (v.occurrences.length > 1) issues.push({ type: 'repeat', vehicle: v.idx, count: v.occurrences.length });
+    }
+    const unknown = leftovers(text, plates);
+    for (const u of unknown) Object.assign(u, diagnose(u.raw));
+    return { text, plates, vehicles, unknown, issues };
+  }
+
+  // ---- Diagnostics + fixes for parts that are not plates ----
+
+  const SERI_RE = /^(?:RM|LD|CD|HC|KT|[ABCDEFGHKLMNPSTUVXYZR])$/;
+  // Letters typed instead of digits (only in the digit positions: mã tỉnh + số thứ tự)
+  const AS_DIGIT = { O: '0', D: '0', Q: '0', I: '1', L: '1', S: '5', B: '8', Z: '2', G: '6' };
+  const toDigits = (s) => s.replace(/[A-Z]/g, (c) => AS_DIGIT[c] || c);
+
+  // One token (letters + digits only) -> fixed compact plate or null
+  function fixCompact(c) {
+    for (const seriLen of [2, 1]) {
+      const head = toDigits(c.slice(0, 2));
+      const seri = c.slice(2, 2 + seriLen);
+      const tail = toDigits(c.slice(2 + seriLen));
+      const fixed = head + seri + tail;
+      if (SERI_RE.test(seri) && VALID_RE.test(fixed)) return fixed;
+    }
+    return null;
+  }
+
+  // Suggested plates for a part that is not a plate (typo O→0, I→1, …; spaces inside)
+  function suggest(raw) {
+    const up = upper(raw);
+    const compact = (s) => s.replace(/[^A-Z0-9]/g, '');
+    const whole = fixCompact(compact(up));
+    if (whole) return [formatCompact(whole)];
     const out = [];
-    const up = pgUpper(raw);
-    let m;
-    CANDIDATE_RE.lastIndex = 0;
-    while ((m = CANDIDATE_RE.exec(up)) !== null) {
-      const compact = compactOf(m[0]);
-      if (VALID_RE.test(compact)) out.push(formatPlate(compact, true));
+    for (const tok of up.split(/\s+/)) {
+      const f = fixCompact(compact(tok));
+      if (f) out.push(formatCompact(f));
     }
     return out;
   }
 
-  function diagnose(row) {
-    if (row.is_valid) return null;
-    const c = row.compact;
-    const cands = findCandidates(row.raw);
-    if (c === '') return { reason: 'Phần rỗng (chỉ có xuống dòng / ký hiệu)', candidates: [] };
-    if (cands.length >= 2)
-      return {
-        reason: `Có ${cands.length} biển trong 1 phần — thiếu dấu phân cách , ; & / (xuống dòng, khoảng trắng không tách)`,
-        candidates: cands,
-      };
-    if (cands.length === 1)
-      return { reason: 'Có chữ/ký tự thừa quanh biển số (vd. "Mooc", "Rơ móc")', candidates: cands };
-    if (/[^\x00-\x7F]/.test(c)) return { reason: 'Chứa ký tự có dấu / không phải A-Z, 0-9', candidates: [] };
+  // Why a part is not a plate (same wording as v1 split-plates.js diagnose)
+  function diagnose(raw) {
+    const candidates = suggest(raw);
+    const c = upper(raw).replace(/[^\p{L}\p{Nd}]/gu, '');
+    let reason;
     const m = c.match(/^([0-9]*)([A-Z]*)([0-9]*)(.*)$/);
-    if (m[4]) return { reason: 'Sai cấu trúc (số + seri + số thứ tự)', candidates: [] };
-    if (m[1].length !== 2) return { reason: `Mã địa phương phải 2 số, đang có ${m[1].length}`, candidates: [] };
-    if (m[1][0] === '0') return { reason: 'Mã địa phương phải từ 11-99', candidates: [] };
-    if (!/^(?:[ABCDEFGHKLMNPSTUVXYZR]|RM|LD|CD|HC|KT)$/.test(m[2]))
-      return { reason: `Seri "${m[2] || '(trống)'}" không hợp lệ (TT 79/2024)`, candidates: [] };
-    if (m[3].length < 4 || m[3].length > 5)
-      return { reason: `Số thứ tự phải 4 hoặc 5 chữ số, đang có ${m[3].length}`, candidates: [] };
-    return { reason: 'Không khớp mẫu biển số', candidates: [] };
+    if (/[^\x00-\x7F]/.test(c)) reason = 'Chứa ký tự có dấu / không phải A-Z, 0-9';
+    else if (m[4]) reason = 'Sai cấu trúc (số + seri + số thứ tự)';
+    else if (m[1].length !== 2) reason = `Mã địa phương phải 2 số, đang có ${m[1].length}`;
+    else if (m[1][0] === '0') reason = 'Mã địa phương phải từ 11-99';
+    else if (!SERI_RE.test(m[2])) reason = `Seri "${m[2] || '(trống)'}" không hợp lệ (TT 79/2024)`;
+    else if (m[3].length < 4 || m[3].length > 5) reason = `Số thứ tự phải 4 hoặc 5 chữ số, đang có ${m[3].length}`;
+    else reason = 'Không khớp mẫu biển số';
+    if (candidates.length) reason = 'Gõ nhầm chữ / số (vd. O→0, I→1) — ' + reason.charAt(0).toLowerCase() + reason.slice(1);
+    return { reason, candidates };
   }
 
-  // Valid rows whose plate already appeared earlier (same order as split_plates_array dedupe).
-  function findDuplicates(rows) {
-    const first = new Map();
-    const dups = [];
-    for (const r of rows) {
-      if (!r.is_valid) continue;
-      if (first.has(r.plate)) dups.push({ row: r, firstRow: first.get(r.plate) });
-      else first.set(r.plate, r);
-    }
-    return dups;
+  // Replace every unknown part that has a suggestion. list = analyse().unknown rows (default: all)
+  function applyFixes(text, list) {
+    list = (list || analyse(text).unknown).filter((u) => u.candidates.length);
+    for (const u of [...list].sort((a, b) => b.start - a.start))
+      text = text.slice(0, u.start) + u.candidates.join(', ') + text.slice(u.end);
+    return { text, fixed: list.length };
   }
 
-  // Remove one part (from splitPlatesDetailed) plus one adjacent separator, keeping the text tidy:
-  //   "a, X, b" -> "a, b"   (eat X + following separator + spaces)
-  //   "a, X"    -> "a"      (last part: eat preceding separator + X)
-  function removePart(text, r) {
-    if (r.sepAfter >= 0) {
-      let end = r.sepAfter + 1;
-      while (text[end] === ' ' || text[end] === '\t') end++;
-      return text.slice(0, r.start) + text.slice(end);
+  // ---- Remove text (duplicates, wrong vehicles) and keep the separators tidy ----
+
+  // "a, X, b" -> "a, b"; "a, X" -> "a"; "a\nX\nb" -> "a\nb". A "Mooc" / "Rơ móc" right before X goes too.
+  function removeSpan(text, start, end, keepKeyword) {
+    const kw = keepKeyword ? null : text.slice(Math.max(0, start - 24), start).match(/(?:R[OƠÔ]\s*)?M[OÓÒỌÕỎƠ]+C\s*[:\-–]?\s*$/iu);
+    if (kw) start -= kw[0].length;
+    const after = text.slice(end).match(/^[ \t]*[,;&/]+[ \t]*/);
+    if (after) {
+      const right = text.slice(end + after[0].length);
+      const left = text.slice(0, start);
+      return (right === '' || right.startsWith('\n') ? left.replace(/[ \t]+$/, '') : left) + right;
     }
-    if (r.sepBefore >= 0) {
-      let start = r.sepBefore;
-      while (start > 0 && (text[start - 1] === ' ' || text[start - 1] === '\t')) start--;
-      return text.slice(0, start) + text.slice(r.end);
-    }
-    return text.slice(0, r.start) + text.slice(r.end);
+    const before = text.slice(0, start).match(/[ \t]*[,;&/]+[ \t]*$/);
+    if (before) return text.slice(0, start - before[0].length) + text.slice(end);
+    const l = text.slice(0, start).match(/[ \t]*$/)[0].length;
+    const r = text.slice(end).match(/^[ \t]*/)[0].length;
+    const left = text.slice(0, start - l), right = text.slice(end + r);
+    if ((left === '' || left.endsWith('\n')) && right.startsWith('\n')) return left + right.slice(1);
+    if (left === '' || right === '' || left.endsWith('\n') || right.startsWith('\n')) return left + right;
+    return left + ' ' + right;
   }
 
-  // Remove every duplicate occurrence (keeps the first one). Re-splits after each removal
-  // so adjacent removals never overlap.
-  function removeDuplicates(text, onlyPlate) {
+  // Remove repeated vehicles, keep the first one. key = only this vehicle (default: all).
+  // Re-analyses after each removal (pairing can change), so it always ends: plates only go down.
+  function removeDuplicates(text, key) {
     let removed = 0;
     for (;;) {
-      const dups = findDuplicates(splitPlatesDetailed(text)).filter((d) => !onlyPlate || d.row.plate === onlyPlate);
-      if (!dups.length) return { text, removed };
-      text = removePart(text, dups[dups.length - 1].row);
+      const occ = analyse(text).vehicles.filter((v) => !key || v.key === key).flatMap((v) => v.occurrences.slice(1));
+      if (!occ.length) return { text, removed };
+      const last = occ.reduce((a, b) => (b.cut.start > a.cut.start ? b : a)).cut;
+      text = removeSpan(text, last.start, last.end, last.keepKeyword);
       removed++;
     }
   }
 
+  // Remove every occurrence of one vehicle (e.g. the wrong pair in a conflict).
+  function removeVehicle(text, key) {
+    let removed = 0;
+    for (;;) {
+      const v = analyse(text).vehicles.find((x) => x.key === key);
+      if (!v) return { text, removed };
+      const last = v.occurrences[v.occurrences.length - 1].cut;
+      text = removeSpan(text, last.start, last.end, last.keepKeyword);
+      removed++;
+    }
+  }
+
+  // Output helpers
+  function vehicleKeys(text) { return analyse(text).vehicles.map((v) => v.key); }
+
   return {
-    splitPlates, splitPlatesArray, splitPlatesDetailed, findCandidates, diagnose, compactOf, formatPlate,
-    findDuplicates, removePart, removeDuplicates,
+    analyse, vehicleKeys, scanPlates, formatCompact,
+    diagnose, suggest, applyFixes, removeSpan, removeDuplicates, removeVehicle,
   };
 });
-/* ==== END split-plates.js ==== */
+/* ==== END split-plates-v2.js ==== */
 </script>
 
 <script>
 (() => {
-  const SP = window.SplitPlates;
+  const V2 = window.SplitPlatesV2;
   const $ = (id) => document.getElementById(id);
   const input = $('input'), backdrop = $('backdrop'), tbody = $('tbody');
-  let rows = [];          // detailed rows + extras
-  let groups = new Map(); // plate -> [first, ...copies]  (only plates seen >= 2 times)
-  let activeIdx = -1;
+  let A = { plates: [], vehicles: [], unknown: [], issues: [] };
+  let warnOf = new Map(); // vehicle idx -> [issue, ...]
+  let activeV = -1;
   const undoStack = [];
 
-  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const show = (s) => esc(s).replace(/\n/g, '<span style="color:#aaa">↵</span>\n');
-  const posChips = (g) => g.map((r, k) =>
-    `<span class="pos${k ? '' : ' first'}" data-i="${r.i}" title="${k ? 'bản trùng' : 'lần đầu (giữ lại)'}">#${r.first_pos}</span>`).join('');
+  const pl = (p, rm) => p ? `<span class="pl${rm ? ' rm' : ''}">${esc(p)}</span>` : '<span class="empty">—</span>';
+  const vKey = (v) => `<b class="pl">${esc(v.tractor || '')}${v.tractor && v.trailer ? '-' : ''}<span class="rm">${esc(v.trailer || '')}</span></b>`;
+  const sepVal = () => $('sep').value.replace('\\n', '\n');
+  const occChips = (v) => v.occurrences.map((o, k) =>
+    `<span class="pos${k ? '' : ' first'}" data-v="${v.idx}" data-k="${k}" title="${k ? 'bản trùng' : 'lần đầu (giữ lại)'}">lần ${k + 1}</span>`).join('');
+  const nDupOf = () => A.vehicles.reduce((n, v) => n + v.occurrences.length - 1, 0);
 
-  function analyse(text) {
-    const r = SP.splitPlatesDetailed(text);
-    r.forEach((row, i) => { row.i = i; row.diag = SP.diagnose(row); });
-    groups = new Map();
-    for (const { row, firstRow } of SP.findDuplicates(r)) {
-      row.dupOf = firstRow;
-      if (!groups.has(row.plate)) groups.set(row.plate, [firstRow]);
-      groups.get(row.plate).push(row);
+  // A → Z: compare plate by plate (đầu kéo, then rơ moóc); digits compare as numbers
+  const coll = new Intl.Collator('vi', { numeric: true, sensitivity: 'base' });
+  const byPlate = (a, b) => coll.compare(a.replace(/[-.]/g, ''), b.replace(/[-.]/g, ''));
+  const byVehicle = (a, b) => byPlate(a.tractor || a.trailer, b.tractor || b.trailer) || byPlate(a.trailer || '', b.trailer || '');
+  function output() {
+    const mode = $('mode').value, az = $('sort').value === 'az';
+    const vs = az ? [...A.vehicles].sort(byVehicle) : A.vehicles;
+    if (mode === 'tsv') return 'Đầu kéo\tRơ moóc\n' + vs.map((v) => `${v.tractor || ''}\t${v.trailer || ''}`).join('\n');
+    if (mode === 'plates') {
+      const ps = [...new Set(A.plates.map((p) => p.plate))];
+      return (az ? ps.sort(byPlate) : ps).join(sepVal());
     }
-    for (const row of r) {
-      row.kind = !row.is_valid ? 'bad' : row.dupOf ? 'dup' : 'ok';
-      row.isDupSrc = !row.dupOf && groups.has(row.plate);
-    }
-    return r;
+    return vs.map((v) => v.key).join(sepVal());
   }
 
   function render() {
     const text = input.value;
-    const keep = activeIdx;
-    rows = analyse(text);
-    activeIdx = -1;
+    A = V2.analyse(text);
+    warnOf = new Map();
+    for (const is of A.issues) {
+      const vs = is.vehicles || [is.vehicle];
+      for (const v of vs) { if (!warnOf.has(v)) warnOf.set(v, []); warnOf.get(v).push(is); }
+    }
+    const dupPlate = new Set(); // plate idx inside a repeated occurrence (not the first)
+    for (const v of A.vehicles) for (const o of v.occurrences.slice(1)) o.plates.forEach((i) => dupPlate.add(i));
 
-    // backdrop highlights
+    // backdrop: plates, the link text between a pair, unknown parts
+    const spans = [];
+    for (const p of A.plates) {
+      const cls = dupPlate.has(p.idx) ? 'dup' : p.isTrailer ? (p.partner < 0 ? 'rm alone' : 'rm') : 'tr';
+      spans.push({ s: p.start, e: p.end, cls, vs: p.vehicles });
+      if (p.partner === p.idx + 1) spans.push({ s: p.end, e: A.plates[p.partner].start, cls: dupPlate.has(p.idx) ? 'dup' : 'link', vs: [p.vehicle] });
+    }
+    A.unknown.forEach((u, i) => spans.push({ s: u.start, e: u.end, cls: 'bad', vs: [], u: i }));
+    spans.sort((a, b) => a.s - b.s);
     let html = '', pos = 0;
-    for (const r of rows) {
-      html += esc(text.slice(pos, r.start));
-      html += `<mark class="${r.kind}${r.isDupSrc ? ' dupsrc' : ''}" data-i="${r.i}">${esc(text.slice(r.start, r.end))}</mark>`;
-      pos = r.end;
+    for (const sp of spans) {
+      if (sp.s < pos) continue;
+      html += esc(text.slice(pos, sp.s));
+      html += `<mark class="${sp.cls}" data-vs="${sp.vs.join(' ')}" data-s="${sp.s}">${esc(text.slice(sp.s, sp.e))}</mark>`;
+      pos = sp.e;
     }
     backdrop.innerHTML = html + esc(text.slice(pos)) + '\n ';
     backdrop.scrollTop = input.scrollTop;
 
-    // stats
-    const nBad = rows.filter((r) => r.kind === 'bad').length;
-    const nDup = rows.filter((r) => r.kind === 'dup').length;
-    const plates = SP.splitPlatesArray(text);
+    // chips
+    const nPair = A.vehicles.filter((v) => v.tractor && v.trailer).length;
+    const nAlone = A.issues.filter((i) => i.type === 'trailer_only').length;
+    const nConf = A.issues.filter((i) => i.type === 'conflict').length;
+    const nMulti = A.issues.filter((i) => i.type === 'multi').length;
+    const nRep = A.issues.filter((i) => i.type === 'repeat').length;
+    const nDup = nDupOf();
     $('chips').innerHTML =
-      `<span class="chip"><span class="tech">Phần tách</span><span class="friendly">Tổng số mục</span>: <b>${rows.length}</b></span>` +
-      `<span class="chip ok">Hợp lệ: <b>${rows.length - nBad}</b></span>` +
-      `<span class="chip ok">Biển duy nhất: <b>${plates.length}</b></span>` +
-      `<span class="chip dup" id="chipDup" title="Lọc bảng theo trùng">Trùng: <b>${nDup}</b> (${groups.size} biển)</span>` +
-      `<span class="chip bad" id="chipBad" title="Lọc bảng theo lỗi">Không hợp lệ: <b>${nBad}</b></span>`;
-    $('chipBad').onclick = () => { $('filter').value = 'bad'; renderTable(); };
-    $('chipDup').onclick = () => { $('filter').value = 'dup'; renderTable(); };
+      `<span class="chip" data-f="all">Biển tìm thấy: <b>${A.plates.length}</b></span>` +
+      `<span class="chip ok" data-f="all">Xe: <b>${A.vehicles.length}</b></span>` +
+      `<span class="chip trl" data-f="pair">Tổ hợp có rơ moóc: <b>${nPair}</b></span>` +
+      (nMulti ? `<span class="chip trl" data-f="multi" title="Lọc danh sách xe">Đầu kéo kéo nhiều rơ moóc: <b>${nMulti}</b></span>` : '') +
+      (nDup ? `<span class="chip dup" data-f="dup" title="Lọc bảng theo trùng">Trùng: <b>${nDup}</b> (${nRep} xe)</span>` : '') +
+      (nAlone ? `<span class="chip dup" data-f="warn">Rơ moóc chưa có đầu kéo: <b>${nAlone}</b></span>` : '') +
+      (nConf ? `<span class="chip dup" data-f="conflict" title="Lọc danh sách xe">Biển ở nhiều xe: <b>${nConf}</b></span>` : '') +
+      (A.unknown.length ? `<span class="chip bad" data-f="err">Không nhận ra: <b>${A.unknown.length}</b></span>` : '');
 
-    // output
-    $('out').value = plates.join($('sep').value.replace('\\n', '\n'));
+    $('out').value = A.vehicles.length ? output() : '';
+    $('sep').disabled = $('mode').value === 'tsv';
+    $('btnReplace').disabled = !A.vehicles.length;
 
-    // errors list: invalid parts, then one entry per duplicated plate
-    const bad = rows.filter((r) => r.kind === 'bad').map((r) =>
-      `<li data-i="${r.i}"><div><b>#${r.first_pos}</b> <code>${show(r.raw)}</code></div>
-         <div class="why">✖ ${esc(r.diag.reason)}</div>
-         ${r.diag.candidates.length ? `<div>Tìm thấy: <span class="cand">${r.diag.candidates.join(', ')}</span>
-           <button class="fix" data-fix="${r.i}">Sửa</button></div>` : ''}</li>`);
-    const dup = [...groups].map(([plate, g]) =>
-      `<li class="dup" data-i="${g[1].i}" data-plate="${esc(plate)}">
-         <div><b>${esc(plate)}</b> xuất hiện <b>${g.length}</b> lần: ${posChips(g)}</div>
-         <div class="why">⚠ Trùng — chỉ giữ lần đầu trong danh sách hợp lệ
-           <button class="fix del" data-deldup="${esc(plate)}">Xoá ${g.length - 1} bản trùng</button></div></li>`);
-    $('errors').innerHTML = bad.length || dup.length
-      ? bad.join('') + dup.join('')
-      : '<li class="empty" style="border:0;background:none">Không có lỗi 🎉</li>';
-    $('btnFixAll').disabled = !rows.some((r) => r.diag && r.diag.candidates.length);
+    // errors / warnings
+    const li = [];
+    A.unknown.forEach((u, i) =>
+      li.push(`<li data-s="${u.start}" data-e="${u.end}"><div><code>${show(u.raw)}</code></div>
+        <div class="why">✖ ${esc(u.reason)}</div>
+        ${u.candidates.length ? `<div>Gợi ý: <span class="cand">${esc(u.candidates.join(', '))}</span>
+          <button class="fix" data-fix="${i}">Sửa</button></div>` : ''}</li>`));
+    for (const is of A.issues) {
+      if (is.type === 'repeat') {
+        const v = A.vehicles[is.vehicle];
+        li.push(`<li class="dup" data-v="${v.idx}" data-k="1"><div>${vKey(v)} nhập <b>${is.count}</b> lần: ${occChips(v)}</div>
+          <div class="why">⚠ Trùng — kết quả chỉ giữ 1 lần
+            <button class="fix del" data-deldup="${esc(v.key)}">Xoá ${is.count - 1} bản trùng</button></div></li>`);
+      } else if (is.type === 'trailer_only') {
+        const v = A.vehicles[is.vehicle];
+        li.push(`<li class="dup" data-v="${v.idx}"><div>${vKey(v)}</div>
+          <div class="why">⚠ Rơ moóc chưa có đầu kéo — thêm biển đầu kéo ngay trước nó
+            <button class="fix del" data-delv="${esc(v.key)}">Xoá</button></div></li>`);
+      }
+    }
+    const conf = A.issues.filter((i) => i.type === 'conflict');
+    if (conf.length)
+      li.push(`<li class="dup" data-cfilter="conflict"><div><b>${conf.length}</b> biển có ở nhiều xe (ghép khác nhau):
+          ${conf.map((is) => `<span class="pos" data-cfilter="plate:${esc(is.plate)}" title="Lọc danh sách xe theo biển này">${esc(is.plate)} ×${is.vehicles.length}</span>`).join('')}</div>
+        <div class="why">⚠ Kiểm tra ở danh sách xe bên dưới
+          <button class="fix" data-cfilter="conflict">Xem ở danh sách xe</button></div></li>`);
+    $('errors').innerHTML = li.length ? li.join('') : `<li class="empty" style="border:0;background:none">${A.plates.length ? 'Không có lỗi 🎉' : 'Chưa có dữ liệu'}</li>`;
+    $('btnFixAll').disabled = !A.unknown.some((u) => u.candidates.length);
     $('btnDelDupAll').disabled = !nDup;
     $('btnDelDupAll').textContent = nDup ? `Xoá mọi trùng (${nDup})` : 'Xoá mọi trùng';
 
+    syncFilterPlates();
     renderTable();
-    if (keep >= 0 && keep < rows.length) setActive(keep, false);
+    if (activeV >= A.vehicles.length) activeV = -1;
+    setActive(activeV, false);
+  }
+
+  // Filter options "plate:<biển>" for each plate used in several vehicles; keep the selection if it still exists
+  function syncFilterPlates() {
+    const sel = $('filter'), cur = sel.value;
+    const conf = A.issues.filter((i) => i.type === 'conflict');
+    $('filterPlates').innerHTML = conf.map((is) =>
+      `<option value="plate:${esc(is.plate)}">${esc(is.plate)} — ${is.vehicles.length} xe</option>`).join('');
+    $('filterPlates').hidden = !conf.length;
+    sel.value = cur;
+    if (sel.value !== cur) sel.value = cur.startsWith('plate:') && conf.length ? 'conflict' : 'all';
+  }
+  function setFilter(f) {
+    $('filter').value = f;
+    if ($('filter').value !== f) $('filter').value = 'all';
+    renderTable();
+    $('filter').closest('.card').scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 
   function renderTable() {
     const f = $('filter').value;
-    let list;
-    if (f === 'dup') {
-      // group duplicates by plate: first occurrence followed by its copies
-      list = [...groups.values()].flatMap((g) => g.map((r, k) => ({ r, groupStart: k === 0 })));
+    let list; // [{ v, head? }]
+    if (f === 'conflict' || f === 'multi' || f.startsWith('plate:')) {
+      // group by plate: header row, then each vehicle that uses the plate
+      list = A.issues.filter((is) => (f.startsWith('plate:') ? is.type === 'conflict' && f === 'plate:' + is.plate : is.type === f))
+        .flatMap((is) => [{ head: is }, ...is.vehicles.map((k) => ({ v: A.vehicles[k] }))]);
     } else {
-      list = rows.filter((r) => f === 'all' || r.kind === f).map((r) => ({ r }));
+      list = A.vehicles.filter((v) =>
+        f === 'all' || (f === 'pair' && v.trailer && v.tractor) || (f === 'single' && !(v.trailer && v.tractor))
+        || (f === 'warn' && (warnOf.get(v.idx) || []).some((is) => is.type === 'conflict' || is.type === 'trailer_only'))
+        || (f === 'dup' && v.occurrences.length > 1)).map((v) => ({ v }));
     }
-    tbody.innerHTML = list.length ? list.map(({ r, groupStart }) => {
-      let note = '';
-      if (r.kind === 'bad') {
-        note = `<span class="tag bad">${esc(r.diag.reason)}</span>` +
-          (r.diag.candidates.length ? `<div class="cand">→ ${r.diag.candidates.join(', ')} <button class="fix" data-fix="${r.i}">Sửa</button></div>` : '');
-      } else if (r.kind === 'dup') {
-        note = `<span class="tag dup">trùng #${r.dupOf.first_pos}</span> <button class="fix del" data-del="${r.i}">Xoá</button>`;
-      } else if (r.isDupSrc) {
-        const n = groups.get(r.plate).length;
-        note = `<span class="tag dup">lần đầu · ${n} lần</span> <button class="fix del" data-deldup="${esc(r.plate)}">Xoá ${n - 1} bản trùng</button>`;
-      }
-      const cls = [r.kind, r.isDupSrc ? 'dupsrc' : '', groupStart ? 'group-start' : ''].join(' ');
-      return `<tr class="${cls}" data-i="${r.i}">
-        <td class="num c-idx">${r.i + 1}</td><td class="num">${r.first_pos}</td>
-        <td class="mono raw">${show(r.raw)}</td><td class="mono plate">${esc(r.plate)}</td>
-        <td><span class="tag ${r.is_valid ? 'ok' : 'bad'}"><span class="tech">${r.is_valid}</span><span class="friendly">${r.is_valid ? '✓ Đúng' : '✗ Sai'}</span></span></td><td class="note">${note}</td></tr>`;
-    }).join('') : '<tr><td colspan="6" class="empty">Không có dòng nào</td></tr>';
-    if (activeIdx >= 0) setActive(activeIdx, false);
+    tbody.innerHTML = list.length ? list.map(({ v, head }) => {
+      if (head) return head.type === 'multi'
+        ? `<tr class="grp"><td colspan="8">Đầu kéo <span class="pl">${esc(head.plate)}</span> kéo ${head.vehicles.length} rơ moóc</td></tr>`
+        : `<tr class="grp"><td colspan="8"><span class="pl">${esc(head.plate)}</span> có ở ${head.vehicles.length} xe — giữ cách ghép đúng, bấm <b>Xoá xe này</b> ở cách ghép sai</td></tr>`;
+      const occ = v.occurrences[0];
+      const raw = occ.level === 'danh sách' // đầu kéo … rơ moóc (skip the other rơ moóc of the list)
+        ? input.value.slice(occ.start, A.plates[occ.plates[0]].end) + ' … ' + A.plates[occ.plates[1]].raw
+        : input.value.slice(occ.start, occ.end);
+      const links = v.occurrences.map((o) => o.level);
+      const issues = warnOf.get(v.idx) || [];
+      const notes = issues.map((is) =>
+        is.type === 'trailer_only' ? '<span class="tag dup">rơ moóc chưa có đầu kéo</span>'
+        : is.type === 'conflict' ? `<span class="tag dup">${esc(is.plate)} có ở ${is.vehicles.length} xe</span>`
+        : is.type === 'multi' ? `<span class="tag info">đầu kéo kéo ${is.vehicles.length} rơ moóc</span>`
+        : `<span class="tag dup">nhập ${is.count} lần</span> <button class="fix del" data-deldup="${esc(v.key)}">Xoá ${is.count - 1} bản trùng</button>`).join(' ');
+      const delBtn = issues.some((is) => is.type === 'conflict' || is.type === 'trailer_only')
+        ? ` <button class="fix del" data-delv="${esc(v.key)}" title="Xoá mọi lần nhập xe này">Xoá xe này</button>` : '';
+      const kind = v.tractor && v.trailer ? '<span class="tag trl">tổ hợp</span>' : '';
+      const where = v.occurrences.length > 1 ? `<div>${occChips(v)}</div>` : '';
+      const warn = issues.some((is) => is.type !== 'multi');
+      return `<tr class="${warn ? 'warn' : ''}" data-v="${v.idx}">
+        <td class="num">${v.idx + 1}</td><td>${vKey(v)}</td><td>${pl(v.tractor)}</td><td>${pl(v.trailer, true)}</td>
+        <td class="num">${v.occurrences.length}</td><td class="mono">${show(raw)}${where}</td>
+        <td>${kind}${notes}${delBtn}</td><td class="tech">${links.join(', ')}</td></tr>`;
+    }).join('') : '<tr><td colspan="8" class="empty">Không có xe nào</td></tr>';
+    if (activeV >= 0) setActive(activeV, false);
   }
 
-  // ---- duplicate group highlight (editor marks + table rows + error entry) ----
-  function highlightGroup(plate) {
+  // ---- highlight + navigation ----
+  function highlight(vIdx, plate) {
     document.querySelectorAll('.same').forEach((el) => el.classList.remove('same'));
-    const g = plate && groups.get(plate);
-    if (!g) return;
-    for (const r of g) {
-      backdrop.querySelector(`mark[data-i="${r.i}"]`)?.classList.add('same');
-      tbody.querySelector(`tr[data-i="${r.i}"]`)?.classList.add('same');
+    const vs = new Set(vIdx >= 0 ? [vIdx] : []);
+    if (plate) for (const v of A.vehicles) if (v.tractor === plate || v.trailer === plate) vs.add(v.idx);
+    for (const k of vs) {
+      backdrop.querySelectorAll(`mark[data-vs~="${k}"]`).forEach((m) => m.classList.add('same'));
+      tbody.querySelector(`tr[data-v="${k}"]`)?.classList.add('same');
     }
-    $('errors').querySelector(`li[data-plate="${CSS.escape(plate)}"]`)?.classList.add('same');
   }
-  const activePlate = () => (activeIdx >= 0 && rows[activeIdx]?.is_valid ? rows[activeIdx].plate : null);
-
-  // ---- navigation: table/errors -> input ----
-  function jumpTo(i) {
-    const r = rows[i];
-    if (!r) return;
-    input.focus({ preventScroll: true });
-    input.setSelectionRange(r.start, r.end);
-    const mark = backdrop.querySelector(`mark[data-i="${i}"]`);
-    if (mark) input.scrollTop = Math.max(0, mark.offsetTop - input.clientHeight / 3);
-    backdrop.scrollTop = input.scrollTop;
-    setActive(i, false);
-    input.closest('.card').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }
-
-  // ---- navigation: caret in input -> table row ----
-  function setActive(i, scrollRow) {
-    activeIdx = i;
-    backdrop.querySelectorAll('mark.active').forEach((m) => m.classList.remove('active'));
+  function setActive(vIdx, scrollRow) {
+    activeV = vIdx;
     tbody.querySelectorAll('tr.active').forEach((t) => t.classList.remove('active'));
-    highlightGroup(activePlate());
-    if (i < 0) return;
-    backdrop.querySelector(`mark[data-i="${i}"]`)?.classList.add('active');
-    const tr = tbody.querySelector(`tr[data-i="${i}"]`);
+    highlight(vIdx);
+    if (vIdx < 0) return;
+    const tr = tbody.querySelector(`tr[data-v="${vIdx}"]`);
     if (tr) {
       tr.classList.add('active');
-      if (scrollRow) {
-        const wrap = tr.closest('.tablewrap');
-        wrap.scrollTop = tr.offsetTop - wrap.clientHeight / 2;
-      }
+      if (scrollRow) { const w = tr.closest('.tablewrap'); w.scrollTop = tr.offsetTop - w.clientHeight / 2; }
     }
+  }
+  function select(s, e) {
+    input.focus({ preventScroll: true });
+    input.setSelectionRange(s, e);
+    const mark = backdrop.querySelector(`mark[data-s="${s}"]`);
+    if (mark) input.scrollTop = Math.max(0, mark.offsetTop - input.clientHeight / 3);
+    backdrop.scrollTop = input.scrollTop;
+    input.closest('.card').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  function jumpVehicle(vIdx, k = 0) {
+    const v = A.vehicles[vIdx];
+    if (!v) return;
+    const o = v.occurrences[k] || v.occurrences[0];
+    select(o.start, o.end);
+    setActive(vIdx, false);
   }
   function syncFromCaret() {
     const p = input.selectionStart;
-    const r = rows.find((x) => p >= x.start && p <= x.end);
-    setActive(r ? r.i : -1, true);
+    const hit = A.plates.find((x) => p >= x.start && p <= x.end);
+    setActive(hit ? hit.vehicle : -1, true);
   }
 
   // ---- edits (fix / delete) with undo ----
@@ -576,7 +716,7 @@
     const top = input.scrollTop;
     input.value = text;
     input.scrollTop = top;
-    activeIdx = -1;
+    activeV = -1;
     render();
     backdrop.scrollTop = input.scrollTop;
     if (msg) toast(msg);
@@ -587,40 +727,44 @@
     input.value = undoStack.pop();
     input.scrollTop = top;
     $('btnUndo').disabled = !undoStack.length;
+    activeV = -1;
     render();
     toast('Đã hoàn tác');
   }
-
   function applyFixes(list) {
-    let text = input.value;
-    for (const r of [...list].sort((a, b) => b.start - a.start))
-      text = text.slice(0, r.start) + r.diag.candidates.join(', ') + text.slice(r.end);
-    setText(text, `Đã sửa ${list.length} phần`);
+    const { text, fixed } = V2.applyFixes(input.value, list);
+    setText(text, `Đã sửa ${fixed} phần`);
   }
-  function deleteRow(r) {
-    setText(SP.removePart(input.value, r), `Đã xoá ${r.plate} (#${r.first_pos})`);
+  function deleteDuplicates(key) {
+    const { text, removed } = V2.removeDuplicates(input.value, key);
+    setText(text, `Đã xoá ${removed} bản trùng${key ? ' của ' + key : ''}`);
   }
-  function deleteDuplicates(plate) {
-    const { text, removed } = SP.removeDuplicates(input.value, plate);
-    setText(text, `Đã xoá ${removed} bản trùng${plate ? ' của ' + plate : ''}`);
+  function deleteVehicle(key) {
+    const { text, removed } = V2.removeVehicle(input.value, key);
+    setText(text, `Đã xoá ${key} (${removed} lần)`);
   }
 
-  function onClickRow(e) {
-    const btn = e.target.closest('[data-fix],[data-del],[data-deldup]');
+  function onClick(e) {
+    const btn = e.target.closest('[data-fix],[data-deldup],[data-delv]');
     if (btn) {
       e.stopPropagation();
-      if (btn.dataset.fix) applyFixes([rows[+btn.dataset.fix]]);
-      else if (btn.dataset.del) deleteRow(rows[+btn.dataset.del]);
-      else deleteDuplicates(btn.dataset.deldup);
+      if (btn.dataset.fix !== undefined) applyFixes([A.unknown[+btn.dataset.fix]]);
+      else if (btn.dataset.deldup !== undefined) deleteDuplicates(btn.dataset.deldup);
+      else deleteVehicle(btn.dataset.delv);
       return;
     }
-    const el = e.target.closest('[data-i]');
-    if (el) jumpTo(+el.dataset.i);
+    const cf = e.target.closest('[data-cfilter]');
+    if (cf) { setFilter(cf.dataset.cfilter); return; }
+    const el = e.target.closest('[data-v],[data-s]');
+    if (!el) return;
+    if (el.dataset.s !== undefined && el.dataset.v === undefined) { select(+el.dataset.s, +el.dataset.e); return; }
+    if (+el.dataset.v >= 0) jumpVehicle(+el.dataset.v, +(el.dataset.k || 0));
   }
   function onHover(e) {
-    const el = e.target.closest('[data-i]');
-    const r = el && rows[+el.dataset.i];
-    highlightGroup(r && r.is_valid ? r.plate : activePlate());
+    const el = e.target.closest('[data-v]');
+    if (!el) return highlight(activeV);
+    const li = e.target.closest('li[data-plate]');
+    highlight(+el.dataset.v, li && !e.target.closest('.pos,button') ? li.dataset.plate : null);
   }
 
   function toast(msg) {
@@ -628,8 +772,6 @@
     t.textContent = msg; t.classList.add('show');
     clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 1600);
   }
-
-  function loadText(text) { input.value = text; input.scrollTop = 0; activeIdx = -1; render(); }
   function loadFile(f) { if (f) f.text().then((t) => setText(t, `Đã nạp ${f.name}`)); }
 
   // ---- wiring ----
@@ -639,31 +781,40 @@
   ['click', 'keyup', 'select'].forEach((ev) => input.addEventListener(ev, syncFromCaret));
   new ResizeObserver(() => { backdrop.scrollTop = input.scrollTop; }).observe(input);
   for (const el of [tbody, $('errors')]) {
-    el.addEventListener('click', onClickRow);
+    el.addEventListener('click', onClick);
     el.addEventListener('mouseover', onHover);
-    el.addEventListener('mouseleave', () => highlightGroup(activePlate()));
+    el.addEventListener('mouseleave', () => highlight(activeV));
   }
+  $('chips').addEventListener('click', (e) => {
+    const f = e.target.closest('[data-f]')?.dataset.f;
+    if (!f) return;
+    if (f === 'err') { $('errors').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
+    $('filter').value = f; renderTable();
+  });
   $('filter').addEventListener('change', renderTable);
+  $('mode').addEventListener('change', render);
+  $('sort').addEventListener('change', render);
   $('sep').addEventListener('change', render);
-  $('btnFixAll').onclick = () => applyFixes(rows.filter((r) => r.diag && r.diag.candidates.length));
+  $('btnFixAll').onclick = () => applyFixes();
   $('btnDelDupAll').onclick = () => deleteDuplicates();
   $('btnUndo').onclick = undo;
   $('btnSample').onclick = () => setText($('sample').textContent, 'Đã nạp dữ liệu mẫu');
   $('btnClear').onclick = () => { setText(''); input.focus(); };
   $('btnOpen').onclick = () => $('file').click();
   $('file').onchange = (e) => { loadFile(e.target.files[0]); e.target.value = ''; };
+  $('btnReplace').onclick = () => setText(A.vehicles.map((v) => v.key).join('\n'), 'Đã thay ô nhập bằng kết quả (có thể hoàn tác)');
   input.addEventListener('dragover', (e) => e.preventDefault());
   input.addEventListener('drop', (e) => { if (e.dataTransfer.files.length) { e.preventDefault(); loadFile(e.dataTransfer.files[0]); } });
   $('btnCopy').onclick = async () => {
     const v = $('out').value;
     try { await navigator.clipboard.writeText(v); } catch { $('out').select(); document.execCommand('copy'); }
-    toast(`Đã copy ${SP.splitPlatesArray(input.value).length} biển`);
+    toast(`Đã copy ${A.vehicles.length} xe`);
   };
-
-  loadText(document.body.classList.contains('beta') ? '' : $('sample').textContent);
   document.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'd') { e.preventDefault(); document.body.classList.toggle('beta'); }
   });
+
+  render();
 })();
 </script>
 </body>
