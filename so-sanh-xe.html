@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>So sánh 2 danh sách xe</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --line: #dde1e6; --text: #1f2328; --muted: #6a737d;
+    --ok: #1a7f37; --ok-bg: #dafbe1; --bad: #cf222e; --bad-bg: #ffd8d3; --dup: #9a6700; --dup-bg: #fff1b8;
+    --a: #0550ae; --a-bg: #ddf4ff; --b: #8250df; --b-bg: #fbefff;
+    --accent: #0969da; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 12px 20px; background: var(--card); border-bottom: 1px solid var(--line); display: flex; gap: 16px; align-items: center; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 16px; margin: 0; }
+  .beta-tag { font-size: 11px; font-weight: 600; color: #fff; background: #8250df; padding: 1px 6px; border-radius: 4px; vertical-align: middle; margin-left: 6px; }
+  .steps { margin: 12px 20px 0; padding: 10px 14px; background: #ddf4ff; border: 1px solid #54aeff66; border-radius: 8px; }
+  .steps ol { margin: 4px 0 0; padding-left: 22px; }
+  main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px 20px; }
+  @media (max-width: 960px) { main, .results { grid-template-columns: 1fr !important; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
+  .card h2 { font-size: 14px; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .card h2 .sp { flex: 1; }
+  .full { grid-column: 1 / -1; }
+  .card.colA { border-top: 3px solid var(--a); }
+  .card.colB { border-top: 3px solid var(--b); }
+  button, select { font: inherit; font-size: 13px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 6px; background: #f6f8fa; cursor: pointer; }
+  button:hover { background: #eef1f4; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.big { font-size: 15px; padding: 6px 22px; font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  textarea.in { width: 100%; height: 260px; font: 13px/20px var(--mono); padding: 10px; border: 1px solid var(--line); border-radius: 6px; resize: vertical; }
+  textarea.in:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px #0969da22; }
+  .stat { margin-top: 6px; font-size: 13px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
+  .tag { font-size: 12px; padding: 0 6px; border-radius: 4px; white-space: nowrap; display: inline-block; }
+  .tag.ok { background: var(--ok-bg); color: var(--ok); }
+  .tag.bad { background: var(--bad-bg); color: var(--bad); }
+  .tag.dup { background: var(--dup-bg); color: var(--dup); }
+  .tag.a { background: var(--a-bg); color: var(--a); }
+  .tag.b { background: var(--b-bg); color: var(--b); }
+  .warns { margin: 6px 0 0; padding: 0; list-style: none; font-size: 12px; max-height: 110px; overflow: auto; }
+  .warns li { padding: 2px 6px; border-left: 3px solid var(--bad); background: #fff6f5; margin-bottom: 3px; border-radius: 0 4px 4px 0; }
+  .warns li.dup { border-color: var(--dup); background: #fffbea; }
+  .warns code { font-family: var(--mono); }
+  .actions { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
+  .actions .hint { color: var(--muted); font-size: 12px; }
+  .results { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 0 20px 20px; }
+  .res h2 b.n { font-variant-numeric: tabular-nums; }
+  .res.both { border-top: 3px solid var(--ok); }
+  .res.onlyA { border-top: 3px solid var(--a); }
+  .res.onlyB { border-top: 3px solid var(--b); }
+  .list { max-height: 520px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  td { padding: 4px 8px; border-bottom: 1px solid #eef0f2; vertical-align: top; }
+  td.num { width: 36px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  td.pl { font-family: var(--mono); white-space: nowrap; }
+  .pl .rm { color: var(--a); }
+  .note { font-size: 12px; color: var(--muted); }
+  .note .pl { font-family: var(--mono); }
+  .empty { color: var(--muted); font-style: italic; padding: 8px; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; padding: 0 20px 12px; color: var(--muted); font-size: 13px; }
+  .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #1f2328; color: #fff; padding: 6px 14px; border-radius: 6px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: .92; }
+  .stale { opacity: .55; }
+</style>
+</head>
+<body>
+<header>
+  <h1>So sánh 2 danh sách xe<span class="beta-tag">BETA</span></h1>
+</header>
+
+<div class="steps">
+  <b>Cách dùng</b>
+  <ol>
+    <li>Dán danh sách xe vào cột <b>A</b> và cột <b>B</b>. Không cần sửa dấu: trang tự tìm biển số trong chữ.</li>
+    <li>Đầu kéo đứng trước, rơ moóc (seri <b>R</b> / <b>RM</b>) đứng sau: mỗi rơ moóc được ghép với đầu kéo gần nhất phía trước, vd. <code>50H.02882-51R 32988</code> → <code>50H-028.82-51R-329.88</code>.</li>
+    <li>Bấm <b>So sánh</b> (hoặc Ctrl+Enter). Kết quả: xe có ở cả 2 cột, xe chỉ có ở A, xe chỉ có ở B. Bấm <b>Copy</b> để lấy từng danh sách.</li>
+  </ol>
+</div>
+
+<main>
+  <section class="card colA">
+    <h2><span class="tag a">A</span> Danh sách A <span class="sp"></span>
+      <button data-open="A">Mở file…</button><button data-clear="A">Xoá</button>
+    </h2>
+    <textarea class="in" id="inA" spellcheck="false" placeholder="Dán danh sách xe A, vd: 50H.02882-51R 32988, 61H 04963; 61R06488"></textarea>
+    <div class="stat" id="statA"></div>
+    <ul class="warns" id="warnA"></ul>
+  </section>
+  <section class="card colB">
+    <h2><span class="tag b">B</span> Danh sách B <span class="sp"></span>
+      <button data-open="B">Mở file…</button><button data-clear="B">Xoá</button>
+    </h2>
+    <textarea class="in" id="inB" spellcheck="false" placeholder="Dán danh sách xe B"></textarea>
+    <div class="stat" id="statB"></div>
+    <ul class="warns" id="warnB"></ul>
+  </section>
+  <div class="full actions">
+    <button id="btnCompare" class="primary big">So sánh</button>
+    <button id="btnSwap" title="Đổi chỗ 2 cột">⇄ Đổi chỗ A ↔ B</button>
+    <button id="btnSample">Thử dữ liệu mẫu</button>
+    <span class="hint">Ctrl+Enter để so sánh</span>
+  </div>
+</main>
+
+<div class="toolbar" id="toolbar" hidden>
+  So sánh theo
+  <select id="by">
+    <option value="vehicle">Xe (đầu kéo + rơ moóc)</option>
+    <option value="plate">Từng biển số</option>
+  </select>
+  Sắp xếp
+  <select id="sort"><option value="input">Thứ tự nhập</option><option value="az">A → Z</option></select>
+  Copy ngăn cách bởi
+  <select id="sep"><option value="\n">xuống dòng</option><option value=", ">, </option><option value="; ">; </option></select>
+  <button id="btnCopyAll" title="Copy cả 3 danh sách, có tiêu đề">Copy cả 3</button>
+</div>
+<section class="results" id="results" hidden>
+  <div class="card res both"><h2>Có ở cả A và B: <b class="n" id="nBoth">0</b><span class="sp"></span><button data-copy="both" class="primary">Copy</button></h2><div class="list" id="listBoth"></div></div>
+  <div class="card res onlyA"><h2>Chỉ có ở A: <b class="n" id="nA">0</b><span class="sp"></span><button data-copy="onlyA" class="primary">Copy</button></h2><div class="list" id="listA"></div></div>
+  <div class="card res onlyB"><h2>Chỉ có ở B: <b class="n" id="nB">0</b><span class="sp"></span><button data-copy="onlyB" class="primary">Copy</button></h2><div class="list" id="listB"></div></div>
+</section>
+<input type="file" id="file" accept=".txt,.csv,text/*" hidden>
+<div class="toast" id="toast"></div>
+
+<script type="text/plain" id="sampleA">50H.02882-51R 32988, 51D.63368-51R 33059
+61H 04963; 61R06488;50R52246;50RM08328 61E03293
+50H-72722 - mooc 50RM08038, 51C-94762, 61H-08098-61RM-01379
+81H-04394 Romooc: 81RM-01131; 81R-00606</script>
+<script type="text/plain" id="sampleB">50H-028.82-51R-329.88
+61H-049.63-61R-064.88
+61H-049.63-50RM-083.28
+50H-727.22-50RM-080.38
+51C-947.62
+61H-080.98-61RM-099.99
+81H-043.94-81RM-011.31
+81H-043.94-81R-005.15
+60C 54916</script>
+
+<script>
+/* ==== BEGIN split-plates-v2.js (giữ y hệt file split-plates-v2.js) ==== */
+// split-plates v2 (beta-v2): find plates anywhere in free text and join each
+// rơ moóc / sơ mi rơ moóc (seri R or RM) to its đầu kéo (any other seri).
+// UI only — NOT part of SQL parity (split-plates.sql is unchanged). Test: node split-plates-v2.test.js
+// Works in browser (window.SplitPlatesV2) and Node (module.exports).
+//
+// Domain:
+//   - Đầu kéo and sơ mi rơ moóc are 2 vehicles, each has its own plate.
+//   - Seri "R" (old, e.g. 51R-329.88) and "RM" (TT 24/2023, TT 79/2024, e.g. 50RM-080.38) = rơ moóc.
+//   - Output of a pair: "<đầu kéo>-<rơ moóc>", e.g. 50H-028.82-51R-329.88.
+//
+// Rule (user, 2026-10-30): the đầu kéo is ALWAYS written first, the rơ moóc after it.
+//   Each rơ moóc joins the nearest đầu kéo BEFORE it; separators and other text do not matter.
+//   One đầu kéo followed by n rơ moóc -> n vehicles:
+//     "61H 04963; 61R06488;50R52246;50RM08328 61E03293"
+//       -> 61H-049.63-61R-064.88, 61H-049.63-50R-522.46, 61H-049.63-50RM-083.28, 61E-032.93
+//   A rơ moóc with no đầu kéo before it stays alone (warning 'trailer_only').
+//   A đầu kéo with no rơ moóc after it is a vehicle on its own.
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.SplitPlatesV2 = api;
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  const VALID_RE = /^[1-9][0-9](?:[ABCDEFGHKLMNPSTUVXYZR]|RM|LD|CD|HC|KT)[0-9]{4,5}$/;
+  // A plate anywhere in the text. Letters may touch the left side ("MOOC51R25011"), digits may not.
+  const SCAN_RE =
+    /(?<![0-9])([1-9][0-9])[ \t]*[-–—.]?[ \t]*(RM|LD|CD|HC|KT|[ABCDEFGHKLMNPSTUVXYZR])[ \t]*[-–—.]?[ \t]*([0-9]{3}[ \t]*\.?[ \t]*[0-9]{2}|[0-9]{4})(?![0-9])/gu;
+  // Upper-case per code point, keep string length (same idea as PG upper()).
+  function upper(s) {
+    let out = '';
+    for (const ch of s) {
+      const u = ch.toUpperCase();
+      out += u.length === ch.length ? u : ch;
+    }
+    return out;
+  }
+
+  function formatCompact(c) {
+    const m5 = c.match(/^([0-9]{2}[A-Z]{1,2})([0-9]{3})([0-9]{2})$/);
+    if (m5) return `${m5[1]}-${m5[2]}.${m5[3]}`;
+    const m4 = c.match(/^([0-9]{2}[A-Z]{1,2})([0-9]{4})$/);
+    return m4 ? `${m4[1]}-${m4[2]}` : c;
+  }
+
+  // Every plate in the text: { plate, compact, province, seri, isTrailer, start, end, raw, idx }
+  function scanPlates(text) {
+    if (text == null) return [];
+    const up = upper(text);
+    const out = [];
+    let m;
+    SCAN_RE.lastIndex = 0;
+    while ((m = SCAN_RE.exec(up)) !== null) {
+      const compact = m[1] + m[2] + m[3].replace(/[ \t.]/g, '');
+      if (!VALID_RE.test(compact)) continue;
+      out.push({
+        plate: formatCompact(compact),
+        compact,
+        province: m[1],
+        seri: m[2],
+        isTrailer: m[2] === 'R' || m[2] === 'RM',
+        start: m.index,
+        end: m.index + m[0].length,
+        raw: text.slice(m.index, m.index + m[0].length),
+        idx: out.length,
+      });
+    }
+    return out;
+  }
+
+  // Text parts that hold digits but are not part of any plate (wrong plates, typos).
+  function leftovers(text, plates) {
+    const out = [];
+    let pos = 0;
+    const gaps = [];
+    for (const p of plates) { gaps.push([pos, p.start]); pos = p.end; }
+    gaps.push([pos, text.length]);
+    for (const [gs, ge] of gaps) {
+      const re = /[^,;&/\n\r]+/g;
+      const gap = text.slice(gs, ge);
+      let m;
+      while ((m = re.exec(gap)) !== null) {
+        if (!/[0-9]/.test(m[0])) continue;
+        const lead = m[0].length - m[0].trimStart().length;
+        const raw = m[0].trim();
+        out.push({ raw, start: gs + m.index + lead, end: gs + m.index + lead + raw.length });
+      }
+    }
+    return out;
+  }
+
+  // Main entry. Returns:
+  //   plates:   scanPlates() rows + tractor (idx of its đầu kéo, rơ moóc only, -1 = none)
+  //             + partner (rơ moóc: its đầu kéo; đầu kéo: its first rơ moóc; -1 = none)
+  //             + vehicle (first vehicle idx) + vehicles (all vehicle idx)
+  //   vehicles: unique vehicles in order of first appearance
+  //             { key, tractor, trailer, idx, occurrences: [{ plates, start, end, cut, level }] }
+  //             start/end = text from the đầu kéo to the rơ moóc;
+  //             cut = { start, end, keepKeyword } = text to remove when this occurrence is deleted
+  //             (đầu kéo with several rơ moóc: only the rơ moóc is removed, the đầu kéo stays)
+  //             level = 'ghép' (1 rơ moóc), 'danh sách' (several), '—' (alone)
+  //   unknown:  leftovers() rows + diagnose()
+  //   issues:   [{ type: 'trailer_only'|'conflict'|'repeat'|'multi', ... }]
+  function analyse(text) {
+    text = text == null ? '' : String(text);
+    const plates = scanPlates(text);
+    const trailersOf = new Map(); // đầu kéo idx -> [rơ moóc idx]
+    let cur = -1;
+    for (const p of plates) {
+      if (!p.isTrailer) { cur = p.idx; trailersOf.set(cur, []); p.tractor = -1; continue; }
+      p.tractor = cur;
+      if (cur >= 0) trailersOf.get(cur).push(p.idx);
+    }
+
+    const vehicles = [];
+    const byKey = new Map();
+    const addOcc = (occ, cut, level) => {
+      const tractor = plates[occ[0]].isTrailer ? null : plates[occ[0]].plate;
+      const trailer = occ.length > 1 ? plates[occ[1]].plate : plates[occ[0]].isTrailer ? plates[occ[0]].plate : null;
+      const key = [tractor, trailer].filter(Boolean).join('-');
+      let v = byKey.get(key);
+      if (!v) {
+        v = { key, tractor, trailer, occurrences: [], idx: vehicles.length };
+        byKey.set(key, v);
+        vehicles.push(v);
+      }
+      v.occurrences.push({ plates: occ, start: plates[occ[0]].start, end: plates[occ[occ.length - 1]].end, cut, level });
+      for (const k of occ) (plates[k].vehicles ||= []).includes(v.idx) || plates[k].vehicles.push(v.idx);
+    };
+    for (const p of plates) {
+      if (p.isTrailer) {
+        p.partner = p.tractor;
+        if (p.tractor < 0) addOcc([p.idx], { start: p.start, end: p.end, keepKeyword: false }, '—');
+        continue;
+      }
+      const ts = trailersOf.get(p.idx);
+      p.partner = ts.length ? ts[0] : -1;
+      if (!ts.length) addOcc([p.idx], { start: p.start, end: p.end, keepKeyword: false }, '—');
+      else if (ts.length === 1) addOcc([p.idx, ts[0]], { start: p.start, end: plates[ts[0]].end, keepKeyword: false }, 'ghép');
+      else for (const j of ts) addOcc([p.idx, j], { start: plates[j].start, end: plates[j].end, keepKeyword: true }, 'danh sách');
+    }
+    for (const p of plates) p.vehicle = p.vehicles[0];
+
+    const issues = [];
+    // Same plate used in different vehicles. Not a conflict: one đầu kéo with several rơ moóc ('multi').
+    const usage = new Map(); // plate -> Set(vehicle idx)
+    for (const v of vehicles)
+      for (const pl of [v.tractor, v.trailer]) if (pl) {
+        if (!usage.has(pl)) usage.set(pl, new Set());
+        usage.get(pl).add(v.idx);
+      }
+    for (const [plate, set] of usage) {
+      if (set.size < 2) continue;
+      const vs = [...set];
+      const multi = vs.every((k) => vehicles[k].tractor === plate && vehicles[k].trailer);
+      issues.push({ type: multi ? 'multi' : 'conflict', plate, vehicles: vs });
+    }
+    for (const v of vehicles) {
+      if (v.trailer && !v.tractor) issues.push({ type: 'trailer_only', vehicle: v.idx });
+      if (v.occurrences.length > 1) issues.push({ type: 'repeat', vehicle: v.idx, count: v.occurrences.length });
+    }
+    const unknown = leftovers(text, plates);
+    for (const u of unknown) Object.assign(u, diagnose(u.raw));
+    return { text, plates, vehicles, unknown, issues };
+  }
+
+  // ---- Diagnostics + fixes for parts that are not plates ----
+
+  const SERI_RE = /^(?:RM|LD|CD|HC|KT|[ABCDEFGHKLMNPSTUVXYZR])$/;
+  // Letters typed instead of digits (only in the digit positions: mã tỉnh + số thứ tự)
+  const AS_DIGIT = { O: '0', D: '0', Q: '0', I: '1', L: '1', S: '5', B: '8', Z: '2', G: '6' };
+  const toDigits = (s) => s.replace(/[A-Z]/g, (c) => AS_DIGIT[c] || c);
+
+  // One token (letters + digits only) -> fixed compact plate or null
+  function fixCompact(c) {
+    for (const seriLen of [2, 1]) {
+      const head = toDigits(c.slice(0, 2));
+      const seri = c.slice(2, 2 + seriLen);
+      const tail = toDigits(c.slice(2 + seriLen));
+      const fixed = head + seri + tail;
+      if (SERI_RE.test(seri) && VALID_RE.test(fixed)) return fixed;
+    }
+    return null;
+  }
+
+  // Suggested plates for a part that is not a plate (typo O→0, I→1, …; spaces inside)
+  function suggest(raw) {
+    const up = upper(raw);
+    const compact = (s) => s.replace(/[^A-Z0-9]/g, '');
+    const whole = fixCompact(compact(up));
+    if (whole) return [formatCompact(whole)];
+    const out = [];
+    for (const tok of up.split(/\s+/)) {
+      const f = fixCompact(compact(tok));
+      if (f) out.push(formatCompact(f));
+    }
+    return out;
+  }
+
+  // Why a part is not a plate (same wording as v1 split-plates.js diagnose)
+  function diagnose(raw) {
+    const candidates = suggest(raw);
+    const c = upper(raw).replace(/[^\p{L}\p{Nd}]/gu, '');
+    let reason;
+    const m = c.match(/^([0-9]*)([A-Z]*)([0-9]*)(.*)$/);
+    if (/[^\x00-\x7F]/.test(c)) reason = 'Chứa ký tự có dấu / không phải A-Z, 0-9';
+    else if (m[4]) reason = 'Sai cấu trúc (số + seri + số thứ tự)';
+    else if (m[1].length !== 2) reason = `Mã địa phương phải 2 số, đang có ${m[1].length}`;
+    else if (m[1][0] === '0') reason = 'Mã địa phương phải từ 11-99';
+    else if (!SERI_RE.test(m[2])) reason = `Seri "${m[2] || '(trống)'}" không hợp lệ (TT 79/2024)`;
+    else if (m[3].length < 4 || m[3].length > 5) reason = `Số thứ tự phải 4 hoặc 5 chữ số, đang có ${m[3].length}`;
+    else reason = 'Không khớp mẫu biển số';
+    if (candidates.length) reason = 'Gõ nhầm chữ / số (vd. O→0, I→1) — ' + reason.charAt(0).toLowerCase() + reason.slice(1);
+    return { reason, candidates };
+  }
+
+  // Replace every unknown part that has a suggestion. list = analyse().unknown rows (default: all)
+  function applyFixes(text, list) {
+    list = (list || analyse(text).unknown).filter((u) => u.candidates.length);
+    for (const u of [...list].sort((a, b) => b.start - a.start))
+      text = text.slice(0, u.start) + u.candidates.join(', ') + text.slice(u.end);
+    return { text, fixed: list.length };
+  }
+
+  // ---- Remove text (duplicates, wrong vehicles) and keep the separators tidy ----
+
+  // "a, X, b" -> "a, b"; "a, X" -> "a"; "a\nX\nb" -> "a\nb". A "Mooc" / "Rơ móc" right before X goes too.
+  function removeSpan(text, start, end, keepKeyword) {
+    const kw = keepKeyword ? null : text.slice(Math.max(0, start - 24), start).match(/(?:R[OƠÔ]\s*)?M[OÓÒỌÕỎƠ]+C\s*[:\-–]?\s*$/iu);
+    if (kw) start -= kw[0].length;
+    const after = text.slice(end).match(/^[ \t]*[,;&/]+[ \t]*/);
+    if (after) {
+      const right = text.slice(end + after[0].length);
+      const left = text.slice(0, start);
+      return (right === '' || right.startsWith('\n') ? left.replace(/[ \t]+$/, '') : left) + right;
+    }
+    const before = text.slice(0, start).match(/[ \t]*[,;&/]+[ \t]*$/);
+    if (before) return text.slice(0, start - before[0].length) + text.slice(end);
+    const l = text.slice(0, start).match(/[ \t]*$/)[0].length;
+    const r = text.slice(end).match(/^[ \t]*/)[0].length;
+    const left = text.slice(0, start - l), right = text.slice(end + r);
+    if ((left === '' || left.endsWith('\n')) && right.startsWith('\n')) return left + right.slice(1);
+    if (left === '' || right === '' || left.endsWith('\n') || right.startsWith('\n')) return left + right;
+    return left + ' ' + right;
+  }
+
+  // Remove repeated vehicles, keep the first one. key = only this vehicle (default: all).
+  // Re-analyses after each removal (pairing can change), so it always ends: plates only go down.
+  function removeDuplicates(text, key) {
+    let removed = 0;
+    for (;;) {
+      const occ = analyse(text).vehicles.filter((v) => !key || v.key === key).flatMap((v) => v.occurrences.slice(1));
+      if (!occ.length) return { text, removed };
+      const last = occ.reduce((a, b) => (b.cut.start > a.cut.start ? b : a)).cut;
+      text = removeSpan(text, last.start, last.end, last.keepKeyword);
+      removed++;
+    }
+  }
+
+  // Remove every occurrence of one vehicle (e.g. the wrong pair in a conflict).
+  function removeVehicle(text, key) {
+    let removed = 0;
+    for (;;) {
+      const v = analyse(text).vehicles.find((x) => x.key === key);
+      if (!v) return { text, removed };
+      const last = v.occurrences[v.occurrences.length - 1].cut;
+      text = removeSpan(text, last.start, last.end, last.keepKeyword);
+      removed++;
+    }
+  }
+
+  // Output helpers
+  function vehicleKeys(text) { return analyse(text).vehicles.map((v) => v.key); }
+
+  return {
+    analyse, vehicleKeys, scanPlates, formatCompact,
+    diagnose, suggest, applyFixes, removeSpan, removeDuplicates, removeVehicle,
+  };
+});
+/* ==== END split-plates-v2.js ==== */
+</script>
+
+<script>
+(() => {
+  const V2 = window.SplitPlatesV2;
+  const $ = (id) => document.getElementById(id);
+  const STORE = 'so_sanh_xe_v1';
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const coll = new Intl.Collator('vi', { numeric: true, sensitivity: 'base' });
+  const byKey = (a, b) => coll.compare(a.replace(/[-.]/g, ''), b.replace(/[-.]/g, ''));
+  const sepVal = () => $('sep').value.replace('\\n', '\n');
+  let R = null; // last comparison { both, onlyA, onlyB } -> [{ key, note }]
+  let A = null, B = null; // analyse() of each column
+
+  // ---- per-column stats (live) ----
+  function stat(col) {
+    const a = V2.analyse($('in' + col).value);
+    const nPair = a.vehicles.filter((v) => v.tractor && v.trailer).length;
+    const nRep = a.issues.filter((i) => i.type === 'repeat').length;
+    $('stat' + col).innerHTML = a.plates.length
+      ? `<span class="tag ok">${a.vehicles.length} xe</span><span>${nPair} tổ hợp có rơ moóc · ${a.plates.length} biển</span>` +
+        (nRep ? `<span class="tag dup">${nRep} xe nhập trùng (chỉ tính 1 lần)</span>` : '')
+      : '<span>Chưa có dữ liệu</span>';
+    const w = [];
+    for (const u of a.unknown)
+      w.push(`<li>✖ Không nhận ra <code>${esc(u.raw)}</code>${u.candidates.length ? ` — có phải <code>${esc(u.candidates.join(', '))}</code>?` : ''}</li>`);
+    for (const is of a.issues)
+      if (is.type === 'trailer_only') w.push(`<li class="dup">⚠ Rơ moóc <code>${esc(a.vehicles[is.vehicle].key)}</code> chưa có đầu kéo phía trước</li>`);
+    $('warn' + col).innerHTML = w.join('');
+    return a;
+  }
+
+  // ---- comparison ----
+  // Items of one column: vehicles (key) or single plates, unique, in input order
+  function items(a, by) {
+    if (by === 'plate') return [...new Set(a.plates.map((p) => p.plate))];
+    return a.vehicles.map((v) => v.key);
+  }
+  // Hint for a vehicle only in one column: a vehicle ONLY in the other column with the same đầu kéo / rơ moóc
+  // (e.g. A: 61H-080.98-61RM-013.79, B: 61H-080.98-61RM-099.99 -> probably the same xe, typo or other rơ moóc)
+  function hint(key, mine, other, otherName) {
+    if ($('by').value !== 'vehicle') return '';
+    const me = mine.vehicles.find((v) => v.key === key);
+    const mineKeys = new Set(mine.vehicles.map((v) => v.key));
+    const near = other.vehicles.filter((v) => !mineKeys.has(v.key) &&
+      ((me.tractor && v.tractor === me.tractor) || (me.trailer && v.trailer === me.trailer)));
+    if (!near.length) return '';
+    return `${otherName} có: ` + near.map((v) => `<span class="pl">${esc(v.key)}</span>`).join(', ');
+  }
+
+  function compare() {
+    A = V2.analyse($('inA').value);
+    B = V2.analyse($('inB').value);
+    const by = $('by').value;
+    const ia = items(A, by), ib = items(B, by);
+    const sa = new Set(ia), sb = new Set(ib);
+    R = {
+      both: ia.filter((k) => sb.has(k)).map((key) => ({ key })),
+      onlyA: ia.filter((k) => !sb.has(k)).map((key) => ({ key, note: hint(key, A, B, 'B') })),
+      onlyB: ib.filter((k) => !sa.has(k)).map((key) => ({ key, note: hint(key, B, A, 'A') })),
+    };
+    renderResults();
+    $('results').hidden = $('toolbar').hidden = false;
+    $('results').classList.remove('stale');
+    save();
+  }
+
+  const sorted = (list) => ($('sort').value === 'az' ? [...list].sort((x, y) => byKey(x.key, y.key)) : list);
+  function fmtKey(k) {
+    const m = k.match(/^(.*?)-([0-9]{2}RM?-.*)$/); // đầu kéo - rơ moóc
+    return m && !/^[0-9]{2}RM?-/.test(k) ? `${esc(m[1])}-<span class="rm">${esc(m[2])}</span>` : esc(k);
+  }
+  function renderList(id, list) {
+    $(id).innerHTML = list.length
+      ? '<table>' + sorted(list).map((r, i) =>
+        `<tr><td class="num">${i + 1}</td><td class="pl">${fmtKey(r.key)}${r.note ? `<div class="note">${r.note}</div>` : ''}</td></tr>`).join('') + '</table>'
+      : '<div class="empty">Không có</div>';
+  }
+  function renderResults() {
+    if (!R) return;
+    $('nBoth').textContent = R.both.length; $('nA').textContent = R.onlyA.length; $('nB').textContent = R.onlyB.length;
+    renderList('listBoth', R.both); renderList('listA', R.onlyA); renderList('listB', R.onlyB);
+  }
+
+  // ---- copy ----
+  async function copy(text, msg) {
+    try { await navigator.clipboard.writeText(text); }
+    catch { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+    toast(msg);
+  }
+  const keysOf = (name) => sorted(R[name]).map((r) => r.key);
+  document.querySelectorAll('[data-copy]').forEach((b) => b.onclick = () => {
+    const k = keysOf(b.dataset.copy);
+    copy(k.join(sepVal()), `Đã copy ${k.length} ${$('by').value === 'plate' ? 'biển' : 'xe'}`);
+  });
+  $('btnCopyAll').onclick = () => {
+    const part = (title, name) => `${title} (${R[name].length})\n${keysOf(name).join('\n')}`;
+    copy([part('Có ở cả A và B', 'both'), part('Chỉ có ở A', 'onlyA'), part('Chỉ có ở B', 'onlyB')].join('\n\n'), 'Đã copy cả 3 danh sách');
+  };
+
+  // ---- misc ----
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 1600);
+  }
+  function save() {
+    try { localStorage.setItem(STORE, JSON.stringify({ a: $('inA').value, b: $('inB').value, by: $('by').value, sort: $('sort').value })); } catch {}
+  }
+  function onEdit(col) {
+    stat(col);
+    if (R) $('results').classList.add('stale'); // results are old until "So sánh" again
+    save();
+  }
+  let fileCol = 'A';
+  for (const col of ['A', 'B']) {
+    let deb;
+    $('in' + col).addEventListener('input', () => { clearTimeout(deb); deb = setTimeout(() => onEdit(col), 150); });
+    $('in' + col).addEventListener('dragover', (e) => e.preventDefault());
+    $('in' + col).addEventListener('drop', (e) => {
+      if (!e.dataTransfer.files.length) return;
+      e.preventDefault(); e.dataTransfer.files[0].text().then((t) => { $('in' + col).value = t; onEdit(col); });
+    });
+  }
+  document.querySelectorAll('[data-open]').forEach((b) => b.onclick = () => { fileCol = b.dataset.open; $('file').click(); });
+  document.querySelectorAll('[data-clear]').forEach((b) => b.onclick = () => { $('in' + b.dataset.clear).value = ''; onEdit(b.dataset.clear); });
+  $('file').onchange = (e) => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (f) f.text().then((t) => { $('in' + fileCol).value = t; onEdit(fileCol); toast(`Đã nạp ${f.name} vào cột ${fileCol}`); });
+  };
+  $('btnCompare').onclick = compare;
+  $('btnSwap').onclick = () => {
+    const a = $('inA').value; $('inA').value = $('inB').value; $('inB').value = a;
+    stat('A'); stat('B'); if (R) compare();
+  };
+  $('btnSample').onclick = () => {
+    $('inA').value = $('sampleA').textContent; $('inB').value = $('sampleB').textContent;
+    stat('A'); stat('B'); compare();
+  };
+  $('by').onchange = () => { if (R) compare(); };
+  $('sort').onchange = () => { renderResults(); save(); };
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); compare(); }
+  });
+
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE) || 'null');
+    if (s) { $('inA').value = s.a || ''; $('inB').value = s.b || ''; $('by').value = s.by || 'vehicle'; $('sort').value = s.sort || 'input'; }
+  } catch {}
+  stat('A'); stat('B');
+})();
+</script>
+</body>
+</html>
